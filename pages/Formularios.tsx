@@ -786,13 +786,36 @@ export const Formularios: React.FC = () => {
     useEffect(() => {
         fetchForms();
 
-        // Fetch Dictionary Data
+        // Fetch Dictionary Data Function with pagination bypass
         const fetchDictionaries = async () => {
-            const { data: clientsData } = await supabase.from('clientes').select('id, nome_fantasia, razao_social').order('nome_fantasia');
-            if (clientsData) setCompanies(clientsData);
+            // Função auxiliar para contornar o limite de 1000 linhas por request do Supabase
+            // Ordenando por ID no banco para estabilidade e ordenando alfabeticamente no JS
+            const fetchAll = async (tableName: string, selectFields: string, sortField: string) => {
+                let allData: any[] = [];
+                let from = 0;
+                const limit = 1000;
+                while (true) {
+                    const { data, error } = await supabase.from(tableName).select(selectFields).order('id').range(from, from + limit - 1);
+                    if (error || !data) break;
+                    allData = [...allData, ...data];
+                    if (data.length < limit) break;
+                    from += limit;
+                }
 
-            const { data: sectorsData } = await supabase.from('setor').select('id, nome').order('nome');
-            if (sectorsData) setSectors(sectorsData);
+                // Sort local
+                allData.sort((a, b) => {
+                    const valA = (a[sortField] || a.razao_social || '').toLowerCase();
+                    const valB = (b[sortField] || b.razao_social || '').toLowerCase();
+                    return valA.localeCompare(valB);
+                });
+                return allData;
+            };
+
+            const clientsData = await fetchAll('clientes', 'id, nome_fantasia, razao_social', 'nome_fantasia');
+            if (clientsData && clientsData.length > 0) setCompanies(clientsData);
+
+            const sectorsData = await fetchAll('setor', 'id, nome', 'nome');
+            if (sectorsData && sectorsData.length > 0) setSectors(sectorsData);
         };
         fetchDictionaries();
     }, []);
@@ -810,14 +833,32 @@ export const Formularios: React.FC = () => {
                 return;
             }
 
-            // 1. Fetch Units
-            const { data: unitsData, error: unitError } = await supabase
-                .from('unidades')
-                .select('id, nome_unidade')
-                .eq('empresaid', editingForm.empresa) // Ensure the column name in 'unidades' table is exactly 'empresaid'
-                .order('nome_unidade');
+            // 1. Fetch Units with pagination just in case
+            const fetchUnitsWithPagination = async (empresaId: number) => {
+                let allData: any[] = [];
+                let from = 0;
+                const limit = 1000;
+                while (true) {
+                    const { data, error } = await supabase
+                        .from('unidades')
+                        .select('id, nome_unidade')
+                        .eq('empresaid', empresaId)
+                        .order('id')
+                        .range(from, from + limit - 1);
+                    if (error) {
+                        console.error('Error fetching units:', error);
+                        break;
+                    }
+                    if (!data) break;
+                    allData = [...allData, ...data];
+                    if (data.length < limit) break;
+                    from += limit;
+                }
+                allData.sort((a, b) => (a.nome_unidade || '').localeCompare(b.nome_unidade || ''));
+                return allData;
+            };
 
-            if (unitError) console.error('Error fetching units:', unitError);
+            const unitsData = await fetchUnitsWithPagination(editingForm.empresa);
             if (unitsData) {
                 console.log('Units loaded:', unitsData);
                 setUnits(unitsData);

@@ -819,26 +819,64 @@ const RegistrationModal = ({ isOpen, onClose, cpf, onSuccess }: RegistrationModa
         }
     }, [empresaId]);
 
-    const fetchInitialData = async () => {
-        const [resCompanies, resSectores, resCargos] = await Promise.all([
-            supabase.from('clientes').select('id, nome_fantasia, razao_social').order('nome_fantasia'),
-            supabase.from('setor').select('id, nome').order('nome'),
-            supabase.from('cargos').select('id, nome').order('nome')
-        ]);
+    // Função auxiliar para contornar o limite de 1000 linhas por request do Supabase
+    // Modificado para usar order 'id' garantindo estabilidade na paginação e resolver registros faltantes
+    const fetchAll = async (tableName: string, selectFields: string, sortField: string) => {
+        let allData: any[] = [];
+        let from = 0;
+        const limit = 1000;
+        while (true) {
+            const { data, error } = await supabase.from(tableName).select(selectFields).order('id').range(from, from + limit - 1);
+            if (error || !data) break;
+            allData = [...allData, ...data];
+            if (data.length < limit) break;
+            from += limit;
+        }
 
-        if (resCompanies.data) setCompanies(resCompanies.data);
-        if (resSectores.data) setSectores(resSectores.data);
-        if (resCargos.data) setCargos(resCargos.data);
+        allData.sort((a, b) => {
+            const valA = (a[sortField] || a.razao_social || '').toLowerCase();
+            const valB = (b[sortField] || b.razao_social || '').toLowerCase();
+            return valA.localeCompare(valB);
+        });
+
+        return allData;
     };
 
-    const fetchUnits = async (companyId: string) => {
-        const { data } = await supabase
-            .from('unidades')
-            .select('id, nome_unidade')
-            .eq('empresaid', companyId)
-            .order('nome_unidade');
+    // Função para buscar dados iniciais necessários para o cadastro
+    const fetchInitialData = async () => {
+        // Executa as requisições em paralelo com paginação automática e ordenação local
+        const [companiesData, setoresData, cargosData] = await Promise.all([
+            fetchAll('clientes', 'id, nome_fantasia, razao_social', 'nome_fantasia'),
+            fetchAll('setor', 'id, nome', 'nome'),
+            fetchAll('cargos', 'id, nome', 'nome')
+        ]);
 
-        if (data) setUnits(data);
+        if (companiesData) setCompanies(companiesData);
+        if (setoresData) setSectores(setoresData);
+        if (cargosData) setCargos(cargosData);
+    };
+
+    // Função para buscar as unidades vinculadas a uma empresa específica
+    const fetchUnits = async (companyId: string) => {
+        let allData: any[] = [];
+        let from = 0;
+        const limit = 1000;
+        while (true) {
+            const { data, error } = await supabase
+                .from('unidades')
+                .select('id, nome_unidade')
+                .eq('empresaid', companyId)
+                .order('id')
+                .range(from, from + limit - 1);
+
+            if (error || !data) break;
+            allData = [...allData, ...data];
+            if (data.length < limit) break;
+            from += limit;
+        }
+
+        allData.sort((a, b) => (a.nome_unidade || '').localeCompare(b.nome_unidade || ''));
+        setUnits(allData);
     };
 
     const handleRegister = async () => {
