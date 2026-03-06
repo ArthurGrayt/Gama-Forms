@@ -11,11 +11,8 @@ export const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   // Estado de loading enquanto verifica autenticação
   const [loading, setLoading] = useState(true);
-  // Estado de autorização do usuário (role >= 5)
-  const [authorized, setAuthorized] = useState(false);
-
   useEffect(() => {
-    // Função que verifica se o usuário está logado e tem permissão
+    // Função que verifica se o usuário está logado
     const checkAuth = async () => {
       try {
         // Obtém a sessão atual do Supabase
@@ -26,31 +23,9 @@ export const MainLayout: React.FC = () => {
           navigate('/login');
           return;
         }
-
-        // Busca o role do usuário na tabela 'users'
-        const { data: userProfile, error } = await supabase
-          .from('users')
-          .select('role')
-          .eq('user_id', session.user.id)
-          .single();
-
-        if (error) {
-          // Em caso de erro ao buscar role, nega acesso
-          console.error('Error fetching user role:', error);
-          setAuthorized(false);
-        } else {
-          // Converte role para número e verifica se >= 5
-          const roleValue = Number(userProfile?.role);
-          if (!isNaN(roleValue) && roleValue >= 5) {
-            setAuthorized(true);
-          } else {
-            setAuthorized(false);
-          }
-        }
       } catch (err) {
         // Erro genérico de autenticação
         console.error('Auth check error:', err);
-        setAuthorized(false);
       } finally {
         // Finaliza o loading independente do resultado
         setLoading(false);
@@ -79,38 +54,6 @@ export const MainLayout: React.FC = () => {
 
   // Exibe loading enquanto verifica autenticação
   if (loading) return <div className="h-screen w-screen flex items-center justify-center bg-gray-50/50 backdrop-blur-sm">Carregando...</div>;
-
-  // Exibe tela de acesso restrito se o usuário não é autorizado
-  if (!authorized) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-gray-100">
-          {/* Ícone de alerta */}
-          <div className="bg-red-50 text-red-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-            <ShieldAlert size={32} />
-          </div>
-          {/* Título */}
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Acesso Restrito</h2>
-          {/* Mensagem explicativa */}
-          <p className="text-gray-500 mb-8">
-            Seu usuário não possui permissão suficiente para acessar o sistema.
-            <br />
-            <span className="text-sm text-gray-400 mt-2 block">(Nível de acesso inferior a 5)</span>
-          </p>
-          {/* Botão para sair da conta */}
-          <button
-            onClick={() => {
-              supabase.auth.signOut().then(() => navigate('/login'));
-            }}
-            className="w-full bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
-          >
-            <LogOut size={18} />
-            Sair da Conta
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">
