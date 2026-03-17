@@ -816,8 +816,64 @@ const RegistrationModal = ({ isOpen, onClose, cpf, onSuccess }: RegistrationModa
             fetchUnits(empresaId);
         } else {
             setUnits([]);
+            setUnidadeId(undefined); // Reseta a unidade caso a empresa seja desmarcada
         }
     }, [empresaId]);
+
+    // Dispara a busca de setores quando uma unidade é selecionada
+    useEffect(() => {
+        // Verifica se existe um ID de unidade valido
+        if (unidadeId) {
+            // Executa a função passando o identificar numérico da unidade
+            fetchSectors(unidadeId);
+        } else {
+            // Limpa o estado com a array de setores para o dropdown se esvaziar
+            setSectores([]);
+            // Reseta a referência do setor atualmente marcado
+            setSetorId(undefined);
+        }
+    }, [unidadeId]);
+
+    // Função assíncrona para buscar setores pertencentes a unidade
+    const fetchSectors = async (unidadeId: number) => {
+        // Pega os IDs da tabela pivô `unidade_setor` relacionando unidade atual
+        const { data: relData, error: relError } = await supabase
+            .from('unidade_setor')
+            // Consulta informando que deseja pegar o lado do setor
+            .select('setor')
+            // Aplica regra de igualidade na unidade pesquisada
+            .eq('unidade', unidadeId);
+            
+        // Se houver erro impeditivo de continuação ou array for vazio aborta carga
+        if (relError || !relData || relData.length === 0) {
+            // Reseta array vazia garantindo renderizacao inofensiva no react
+            setSectores([]);
+            // Retorna parando a execução
+            return;
+        }
+
+        // Pega todos os registros vindos do relData isolando em lista os Ids
+        const sectorIds = relData.map(r => r.setor);
+
+        // Efetua um novo SELECT em cima dos dados mestre do `setor` batendo o que foi encontrado
+        const { data: secData, error: secError } = await supabase
+            .from('setor')
+            // Puxa Id preenchido e correspondente String via SQL puro
+            .select('id, nome')
+            // Cláusula in equivale a listar todos correspondentes contidos e localizados na matriz de cima
+            .in('id', sectorIds)
+            // Aplica orderBy asc no nome em específico
+            .order('nome');
+            
+        // Verifica persistencia e atribui a variavel de estado React preenchendo o dropdown no HTML
+        if (secData) {
+            // Finaliza marcando opções abertas 
+            setSectores(secData);
+        } else {
+            // Se bugar durante fetch desliga array inteira por limitacao de garantia
+            setSectores([]);
+        }
+    };
 
     // Função auxiliar para contornar o limite de 1000 linhas por request do Supabase
     // Modificado para usar order 'id' garantindo estabilidade na paginação e resolver registros faltantes
@@ -842,17 +898,19 @@ const RegistrationModal = ({ isOpen, onClose, cpf, onSuccess }: RegistrationModa
         return allData;
     };
 
-    // Função para buscar dados iniciais necessários para o cadastro
+    // Função para buscar dados iniciais necessários para o cadastro inicial da tela modal
     const fetchInitialData = async () => {
-        // Executa as requisições em paralelo com paginação automática e ordenação local
-        const [companiesData, setoresData, cargosData] = await Promise.all([
+        // Executa as requisições em paralelo com paginação limitando para Clientes e Cargos, excluindo setores, que vêm via useEffect
+        const [companiesData, cargosData] = await Promise.all([
+            // Exige busca global na collection pai "clientes" (empresas pai)
             fetchAll('clientes', 'id, nome_fantasia, razao_social', 'nome_fantasia'),
-            fetchAll('setor', 'id, nome', 'nome'),
+            // Exige busca global em collection filho isolado sem vinculo de parent "cargos"
             fetchAll('cargos', 'id, nome', 'nome')
         ]);
 
+        // Carrega hook setState com resultado clientes da promessa 0
         if (companiesData) setCompanies(companiesData);
-        if (setoresData) setSectores(setoresData);
+        // Carrega hook setState com resultado cargos da promessa 1 
         if (cargosData) setCargos(cargosData);
     };
 

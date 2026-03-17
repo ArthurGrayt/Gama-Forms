@@ -896,30 +896,26 @@ export const Formularios: React.FC = () => {
             }
 
             try {
-                // Fetch unique 'setorid' from 'colaboradores' for this unit
-                const { data: colabsData, error: colabsError } = await supabase
-                    .from('colaboradores')
-                    .select('setorid')
+                // Busca os IDs dos setores vinculados à unidade através da tabela pivô
+                const { data: relData, error: relError } = await supabase
+                    .from('unidade_setor')
+                    .select('setor')
                     .eq('unidade', editingForm.unidade_id);
 
-                if (colabsError) throw colabsError;
+                if (relError) throw relError;
 
-                if (colabsData && colabsData.length > 0) {
-                    const uniqueSectorIds = [...new Set(colabsData.map((c: any) => c.setorid).filter((id: any) => id !== null && id !== undefined))];
+                const uniqueSectorIds = relData ? Array.from(new Set(relData.map(r => r.setor).filter(id => id))) : [];
 
-                    if (uniqueSectorIds.length > 0) {
-                        // Fetch Sector Details from 'setor' table
-                        const { data: sectorsData, error: sectorsError } = await supabase
-                            .from('setor')
-                            .select('*')
-                            .in('id', uniqueSectorIds)
-                            .order('nome', { ascending: true }); // Assuming 'nome' is the column for name
+                if (uniqueSectorIds.length > 0) {
+                    // Busca os detalhes dos setores da tabela 'setor'
+                    const { data: sectorsData, error: sectorsError } = await supabase
+                        .from('setor')
+                        .select('*')
+                        .in('id', uniqueSectorIds)
+                        .order('nome', { ascending: true }); // Assuming 'nome' is the column for name
 
-                        if (sectorsError) throw sectorsError;
-                        setAvailableSectors(sectorsData || []);
-                    } else {
-                        setAvailableSectors([]);
-                    }
+                    if (sectorsError) throw sectorsError;
+                    setAvailableSectors(sectorsData || []);
                 } else {
                     setAvailableSectors([]);
                 }
@@ -4188,14 +4184,21 @@ export const Formularios: React.FC = () => {
     // LIST VIEW (Default)
 
     return (
-        <div className="h-full flex flex-col animate-in fade-in duration-500">
-            <header className="flex justify-between items-center mb-8 pt-4">
-                <div></div>
-                <Button onClick={handleCreateNew}>
-                    <Plus size={18} />
-                    Novo Formulário
-                </Button>
-            </header>
+        <div className="h-full flex flex-col animate-in fade-in duration-500 p-10">
+            {/* Cabeçalho com Logo e Título */}
+            <div className="flex items-center gap-4 mb-8">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-50 to-white shadow-sm flex items-center justify-center p-2 border border-slate-100">
+                    <img 
+                        src="https://wofipjazcxwxzzxjsflh.supabase.co/storage/v1/object/public/Media/Image/image-removebg-preview%20(2).png" 
+                        alt="Gama Logo" 
+                        className="w-full h-auto object-contain"
+                    />
+                </div>
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Formulários</h1>
+                    <p className="text-slate-500 text-sm">Gerencie e analise as pesquisas da empresa</p>
+                </div>
+            </div>
 
             <div className="flex flex-wrap gap-4 mb-6">
                 <div className="flex-1 min-w-[300px] max-w-md">
@@ -4317,6 +4320,12 @@ export const Formularios: React.FC = () => {
                             </div>
                         )}
                     </div>
+
+                    {/* Botão Novo Formulário Movido para cá, ao lado direito de Ordenar */}
+                    <Button onClick={handleCreateNew} className="h-11 px-5 shadow-sm hover:shadow-md transition-all whitespace-nowrap">
+                        <Plus size={18} className="mr-2 inline-block" />
+                        Novo Formulário
+                    </Button>
 
                     {/* Botão Limpar Tudo (Global) */}
                     {(searchTerm || startDate || endDate || sortBy !== 'name_asc') && (
@@ -4542,7 +4551,7 @@ export const Formularios: React.FC = () => {
                                         }}
                                     >
                                         <option value="">Selecione um setor...</option>
-                                        {(availableSectors.length > 0 ? availableSectors : sectors).map(s => (
+                                        {(!editingForm.unidade_id ? sectors : availableSectors).map(s => (
                                             <option key={s.id} value={s.id}>{s.nome}</option>
                                         ))}
                                     </select>

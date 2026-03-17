@@ -4,8 +4,14 @@ import { MainLayout } from './layouts/MainLayout';
 
 // Lazy Load das páginas mantidas
 const Login = React.lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
+// Lazy Load da página de Formulários
 const Formularios = React.lazy(() => import('./pages/Formularios').then(module => ({ default: module.Formularios })));
+// Lazy Load da página do Formulário Público (slug)
 const FormularioPublico = React.lazy(() => import('./pages/FormularioPublico').then(module => ({ default: module.FormularioPublico })));
+// Lazy Load da página de Gerenciamento de Colaboradores
+const ColabManager = React.lazy(() => import('./pages/ColabManager').then(module => ({ default: module.ColabManager })));
+// Lazy Load da página de Listagem de Colaboradores por Empresa
+const EnterpriseColabList = React.lazy(() => import('./pages/EnterpriseColabList.tsx'));
 
 // Componente de loading exibido enquanto carrega uma página
 const PageLoader = () => (
@@ -35,6 +41,11 @@ function App() {
             <Route index element={<Navigate to="/formularios" replace />} />
             {/* Página de formulários */}
             <Route path="formularios" element={<Formularios />} />
+            {/* Grupo de rotas de colaboradores */}
+            <Route path="colaboradores">
+              <Route index element={<ColabManager />} />
+              <Route path=":empresaId" element={<EnterpriseColabList />} />
+            </Route>
           </Route>
 
           {/* Qualquer rota desconhecida redireciona para raiz */}
