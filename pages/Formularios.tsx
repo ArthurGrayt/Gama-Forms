@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import {
     Plus, Search, FileText, BarChart2, Link as LinkIcon,
     MoreVertical, Edit2, Trash2, X, Check, Copy, ExternalLink,
     ChevronUp, ChevronDown, List, Type, MessageSquare, Star,
-    User, Users, Calendar, Clock, ArrowLeft, ChevronRight, Split, Layout, Minimize2, AlignJustify, GripVertical, ArrowUpDown,
+    User, Users, UserCheck, UserMinus, Calendar, Clock, ArrowLeft, ChevronRight, Split, Layout, Minimize2, AlignJustify, GripVertical, ArrowUpDown,
     Building2, MapPin, Briefcase, Filter, Download, Play, Pause, Settings, Save, CheckCircle, AlertCircle, Send, Hash, Info, ThumbsUp, ThumbsDown, PieChart as PieChartIcon, Eye, Printer
 } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
@@ -519,6 +520,7 @@ const ScrollToTopButton = () => {
 /* --- Main Component --- */
 
 export const Formularios: React.FC = () => {
+    const navigate = useNavigate();
     const [forms, setForms] = useState<Form[]>([]);
 
     const [loading, setLoading] = useState(true);
@@ -548,6 +550,7 @@ export const Formularios: React.FC = () => {
     const [sectors, setSectors] = useState<any[]>([]); // Setores (All)
     const [availableSectors, setAvailableSectors] = useState<any[]>([]); // Setores (Filtered by Unit)
     const [colabsCount, setColabsCount] = useState<number>(0);
+    const [inactiveColabsCount, setInactiveColabsCount] = useState<number>(0);
     const [targetColabsCount, setTargetColabsCount] = useState<number | null>(null);
     const [requireSector, setRequireSector] = useState(false);
 
@@ -811,7 +814,7 @@ export const Formularios: React.FC = () => {
                 return allData;
             };
 
-            const clientsData = await fetchAll('clientes', 'id, nome_fantasia, razao_social', 'nome_fantasia');
+            const clientsData = await fetchAll('clientes', 'id, nome_fantasia, razao_social, cnpj', 'nome_fantasia');
             if (clientsData && clientsData.length > 0) setCompanies(clientsData);
 
             const sectorsData = await fetchAll('setor', 'id, nome', 'nome');
@@ -868,16 +871,28 @@ export const Formularios: React.FC = () => {
             // Get all unit IDs first (from the just fetched data or via query)
             if (unitsData && unitsData.length > 0) {
                 const unitIds = unitsData.map(u => u.id);
-                const { count, error } = await supabase
+                
+                // Ativos
+                const { count: activeCount } = await supabase
                     .from('colaboradores')
                     .select('*', { count: 'exact', head: true })
-                    .in('unidade', unitIds);
+                    .in('unidade', unitIds)
+                    .or('ativo.neq.inativo,ativo.is.null'); // Considera tudo que não é 'inativo' como ativo, incluindo nulos
 
-                const total = count || 0;
-                setColabsCount(total);
-                setRequireSector(total > 20);
+                // Inativos
+                const { count: inactiveCount } = await supabase
+                    .from('colaboradores')
+                    .select('*', { count: 'exact', head: true })
+                    .in('unidade', unitIds)
+                    .eq('ativo', 'inativo');
+
+                const totalActive = activeCount || 0;
+                setColabsCount(totalActive);
+                setInactiveColabsCount(inactiveCount || 0);
+                setRequireSector(totalActive > 20);
             } else {
                 setColabsCount(0);
+                setInactiveColabsCount(0);
                 setRequireSector(false);
             }
         };
@@ -946,7 +961,8 @@ export const Formularios: React.FC = () => {
                     .from('colaboradores')
                     .select('*', { count: 'exact', head: true })
                     .eq('unidade', editingForm.unidade_id)
-                    .eq('setorid', editingForm.setor);
+                    .eq('setorid', editingForm.setor)
+                    .or('ativo.neq.inativo,ativo.is.null'); // Mesma lógica inclusiva
 
                 if (error) throw error;
                 setTargetColabsCount(count);
@@ -974,17 +990,72 @@ export const Formularios: React.FC = () => {
         setLoading(false);
     };
 
-    const handleCreateNew = () => {
-        setEditingForm({
-            title: '',
-            description: '',
-            slug: '',
-            active: true,
-            questions: []
-        });
-        setDeletedQuestionIds([]);
-        setIsPsicosocial(false);
-        setIsEditorOpen(true);
+    const handleCreateNew = async () => {
+        setLoading(true); // Opcional, para dar feedback de carregamento
+
+        try {
+            // Texto base para a descrição conforme NR-01
+            const defaultDescription = `Em atenção às disposições da nova Norma Regulamentadora nº 01 (NR-01), o Setor de Saúde e Segurança reafirma seu firme compromisso com a saúde, a segurança e o bem-estar de todos os trabalhadores desta organização. Reconhecemos que o estresse relacionado ao trabalho é um tema relevante de saúde e segurança, e queremos identificar seus fatores de risco.
+
+Ainda que o colaborador se identifique, o anonimato das respostas será preservado. As informações individuais são de uso exclusivo da consultoria responsável pela análise dos fatores psicossociais e não serão repassadas à empresa.
+
+O questionário anexo contém algumas perguntas simples sobre suas condições de trabalho. 
+
+Sua opinião é essencial para melhorar o ambiente de trabalho.
+
+👉 O questionário leva cerca de 10 minutinhos.
+👉 Marque apenas uma resposta por pergunta.
+
+Em caso de dúvidas, entre em contato com seu Líder.`;
+
+            // Busca as perguntas de um formulário base HSE
+            // Tenta achar o primeiro formulário com hse_id ativo
+            const { data: baseForm } = await supabase
+                .from('forms')
+                .select('id')
+                .not('hse_id', 'is', null)
+                .order('id', { ascending: true })
+                .limit(1)
+                .single();
+
+            let baseQuestions: any[] = [];
+            
+            if (baseForm && baseForm.id) {
+                // Se encontrou um form base, busca as perguntas dele
+                const { data: questions } = await supabase
+                    .from('form_questions')
+                    .select('*')
+                    .eq('form_id', baseForm.id)
+                    .order('question_order', { ascending: true });
+                
+                if (questions) {
+                    // Prepara as perguntas para o novo form (removendo id e form_id antigos, e gerando temp_ids)
+                    baseQuestions = questions.map(q => {
+                        const { id, form_id, ...rest } = q;
+                        return {
+                            ...rest,
+                            temp_id: `q_new_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+                        };
+                    });
+                }
+            }
+
+            setEditingForm({
+                title: '',
+                description: defaultDescription,
+                slug: '',
+                active: true,
+                questions: baseQuestions // Injeta as perguntas base (geralmente as 35 padrão)
+            });
+            setDeletedQuestionIds([]);
+            setIsPsicosocial(true); // Sempre marcado por padrão
+            setIsEditorOpen(true);
+        } catch (error) {
+            console.error("Erro ao preparar novo formulário:", error);
+            alert("Houve um erro ao preparar o formulário. Tente novamente.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleEdit = async (form: Form) => {
@@ -1477,8 +1548,9 @@ export const Formularios: React.FC = () => {
                 console.log(`[Analytics] Inicando busca de população para Unidade ID: ${form.unidade_id}`);
                 const { data: unitUsers } = await supabase
                     .from('colaboradores')
-                    .select('id, nome, setor, setorid, cargo, unidade, cargo_info:cargo(nome)')
-                    .eq('unidade', form.unidade_id);
+                    .select('id, nome, setor, setorid, cargo, unidade, cargo_info:cargo(nome), ativo')
+                    .eq('unidade', form.unidade_id)
+                    .or('ativo.neq.inativo,ativo.is.null'); // Filtra apenas ativos
 
                 allUsers = unitUsers || [];
 
@@ -1486,8 +1558,9 @@ export const Formularios: React.FC = () => {
                     console.log(`[Analytics] Unidade vazia. Buscando na Empresa ID: ${unitEmpresaId}`);
                     const { data: companyUsers } = await supabase
                         .from('colaboradores')
-                        .select('id, nome, setor, setorid, cargo, unidade, cargo_info:cargo(nome)')
-                        .eq('empresaid', unitEmpresaId);
+                        .select('id, nome, setor, setorid, cargo, unidade, cargo_info:cargo(nome), ativo')
+                        .eq('empresaid', unitEmpresaId)
+                        .or('ativo.neq.inativo,ativo.is.null'); // Filtra apenas ativos
                     allUsers = companyUsers || [];
                 }
             } catch (err) {
@@ -1524,14 +1597,16 @@ export const Formularios: React.FC = () => {
             if (userIds.length > 0) {
                 const { data: usersData } = await supabase
                     .from('colaboradores')
-                    .select('id, nome, setor, setorid, cargo, cargo_info:cargo(nome)')
+                    .select('id, nome, setor, setorid, cargo, cargo_info:cargo(nome), ativo')
                     .in('id', userIds);
 
                 if (usersData) {
-                    let validUsersForList = usersData;
+                    const activeUsersData = (usersData || []).filter((u: any) => u.ativo !== 'inativo');
+
+                    let validUsersForList = activeUsersData;
                     if (shouldFilterBySector) {
                         console.log(`[Analytics] Aplicando filtro de setor "${form.setor}" aos respondentes identificados.`);
-                        validUsersForList = usersData.filter((u: any) => String(u.setorid) === String(form.setor));
+                        validUsersForList = activeUsersData.filter((u: any) => String(u.setorid) === String(form.setor));
 
                         const validUserIds = new Set(validUsersForList.map((u: any) => u.id));
                         finalAnswers = aData.filter((a: any) => {
@@ -4489,7 +4564,27 @@ export const Formularios: React.FC = () => {
                                     placeholder="Selecione uma empresa..."
                                     options={companies.map(c => ({ value: c.id, label: c.nome_fantasia || c.razao_social }))}
                                     value={editingForm?.empresa}
-                                    onChange={(val: any) => setEditingForm(prev => ({ ...prev!, empresa: val, unidade_id: undefined, setor: undefined }))}
+                                    onChange={(val: any) => {
+                                        // Busca a empresa selecionada para obter o nome e CNPJ
+                                        const selectedCompany = companies.find(c => c.id === val);
+                                        const companyName = selectedCompany ? (selectedCompany.razao_social || selectedCompany.nome_fantasia || '') : '';
+                                        const cnpj = selectedCompany?.cnpj || '';
+                                        
+                                        setEditingForm(prev => {
+                                            if (!prev) return null;
+                                            
+                                            // Atualiza título e slug com o novo padrão
+                                            const formattedDate = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+                                            
+                                            // Formato: Levantamento Preliminar Psicossocial - (razao_social) - CNPJ
+                                            const newTitle = `Levantamento Preliminar Psicossocial - ${companyName} - ${cnpj}`;
+                                            
+                                            // Slug baseado no novo título
+                                            const newSlug = `levantamento-psicossocial-${companyName.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}-${cnpj.replace(/\D/g, '')}-${formattedDate}`;
+
+                                            return { ...prev, empresa: val, unidade_id: undefined, setor: undefined, title: newTitle, slug: newSlug };
+                                        });
+                                    }}
                                 />
                             </div>
 
@@ -4502,8 +4597,19 @@ export const Formularios: React.FC = () => {
                                     options={units.map(u => ({ value: u.id, label: u.nome_unidade }))}
                                     value={editingForm?.unidade_id}
                                     onChange={(val: any) => {
-                                        console.log('Selected Unit:', val);
-                                        setEditingForm(prev => ({ ...prev!, unidade_id: val }))
+                                        setEditingForm(prev => {
+                                            if (!prev) return null;
+                                            
+                                            // Ao trocar unidade, o setor é resetado. 
+                                            // Removemos o setor do título se ele existir (mantendo as 3 partes base)
+                                            let newTitle = prev.title;
+                                            const parts = newTitle.split(' - ');
+                                            if (parts.length > 3) {
+                                                newTitle = `${parts[0]} - ${parts[1]} - ${parts[2]}`;
+                                            }
+                                            
+                                            return { ...prev, unidade_id: val, setor: undefined, title: newTitle };
+                                        });
                                     }}
                                     disabled={!editingForm?.empresa}
                                 />
@@ -4511,15 +4617,32 @@ export const Formularios: React.FC = () => {
 
                             {/* Colabs Indicator */}
                             {editingForm?.empresa && (
-                                <div className="flex items-center gap-2 text-sm text-slate-500">
-                                    <Users size={16} />
-                                    <span>Total Colaboradores: <b>{colabsCount}</b></span>
+                                <div className="flex items-center gap-4 text-sm text-slate-500">
+                                    <div className="flex items-center gap-1.5" title="Ativos">
+                                        <UserCheck size={16} className="text-emerald-500" />
+                                        <span className="font-bold text-slate-800">{colabsCount}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5" title="Inativos">
+                                        <UserMinus size={16} className="text-slate-400" />
+                                        <span className="font-bold text-slate-800">{inactiveColabsCount}</span>
+                                    </div>
+
+                                    {/* Atalho para Editar Empresa/Colaboradores */}
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(`/colaboradores/${editingForm.empresa}`)}
+                                        className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all flex items-center justify-center group"
+                                        title="Editar Colaboradores da Empresa"
+                                    >
+                                        <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
+                                    </button>
+                                    
                                     {targetColabsCount !== null && (
-                                        <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded ml-2 text-xs font-bold">
+                                        <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-bold">
                                             No Setor: {targetColabsCount}
                                         </span>
                                     )}
-                                    {colabsCount > 20 && <span className="text-amber-600 text-xs font-bold bg-amber-50 px-2 py-0.5 rounded ml-2">Setor Obrigatório</span>}
+                                    {colabsCount > 20 && <span className="text-amber-600 text-xs font-bold bg-amber-50 px-2 py-0.5 rounded">Setor Obrigatório</span>}
                                 </div>
                             )}
 
@@ -4539,11 +4662,27 @@ export const Formularios: React.FC = () => {
                                                 let newTitle = prev.title;
                                                 let newSlug = prev.slug;
 
-                                                // Append sector to title/slug
+                                                // Analisa o título atual para identificar as partes
+                                                const parts = newTitle.split(' - ');
+                                                
                                                 if (sector) {
-                                                    if (!newTitle.includes(sector.nome)) newTitle += ` - ${sector.nome}`;
-                                                    const sectorSlug = sector.nome.toLowerCase().replace(/\s+/g, '-');
+                                                    // Se o título já tem o formato padrão (Pelo menos Prefixo, Empresa e CNPJ)
+                                                    if (parts.length >= 3) {
+                                                        // Garante o formato: Prefixo - Empresa - CNPJ - Novo Setor
+                                                        newTitle = `${parts[0]} - ${parts[1]} - ${parts[2]} - ${sector.nome}`;
+                                                    } else {
+                                                        // Se foi editado manualmente e perdeu o padrão, apenas concatena
+                                                        newTitle += ` - ${sector.nome}`;
+                                                    }
+
+                                                    const sectorSlug = sector.nome.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
+                                                    // Atualiza o slug se o setor não estiver nele
                                                     if (!newSlug.includes(sectorSlug)) newSlug += `-${sectorSlug}`;
+                                                } else {
+                                                    // Se removeu o setor, volta pro título base (3 partes)
+                                                    if (parts.length > 3) {
+                                                        newTitle = `${parts[0]} - ${parts[1]} - ${parts[2]}`;
+                                                    }
                                                 }
 
                                                 return { ...prev, setor: sectorId, title: newTitle, slug: newSlug };

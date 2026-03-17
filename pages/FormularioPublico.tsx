@@ -273,6 +273,27 @@ export const FormularioPublico: React.FC = () => {
             return;
         }
 
+        // Busca dados adicionais de forma separada e segura
+        if (formData.empresa) {
+            const { data: companyData } = await supabase
+                .from('clientes')
+                .select('cnpj')
+                .eq('id', formData.empresa)
+                .single();
+            // @ts-ignore
+            formData.company_cnpj = companyData?.cnpj;
+        }
+
+        if (formData.setor) {
+            const { data: sectorData } = await supabase
+                .from('setor')
+                .select('nome')
+                .eq('id', formData.setor)
+                .single();
+            // @ts-ignore
+            formData.sector_name = sectorData?.nome;
+        }
+
         setForm(formData);
 
         // 2. Get Questions
@@ -362,6 +383,13 @@ export const FormularioPublico: React.FC = () => {
             .maybeSingle();
 
         if (colabData) {
+            // Verifica se o colaborador está inativo antes de prosseguir
+            if (colabData.ativo === 'inativo') {
+                alert("Seu cadastro está inativo nesta empresa. Por favor, entre em contato com o suporte ou RH.");
+                setCheckingCpf(false);
+                return;
+            }
+
             // Found! Get Company Name via Unit
             let companyName = '';
             if (colabData.unidade) {
@@ -555,7 +583,26 @@ export const FormularioPublico: React.FC = () => {
             {step === 'cover' && (
                 <div className={`${FORM_WIDTH} h-full flex flex-col justify-center animate-in slide-in-from-bottom-4 duration-500`}>
                     <div className={`bg-white rounded-lg shadow-sm border border-slate-200 ${ACCENT_BORDER} p-5 sm:p-6 mb-3 flex flex-col max-h-[75vh]`}>
-                        <h1 className="text-lg sm:text-2xl font-normal text-slate-900 mb-3 line-clamp-2">{form?.title}</h1>
+                        <h1 className="text-lg sm:text-2xl font-normal text-slate-900 mb-1 line-clamp-2">{form?.title}</h1>
+                        
+                        {/* Exibição resumida de CNPJ e Setor */}
+                        <div className="mb-4 flex flex-col gap-0.5">
+                            {/* @ts-ignore */}
+                            {form?.company_cnpj && (
+                                <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider px-1 border-l-2 border-slate-200">
+                                    {/* @ts-ignore */}
+                                    CNPJ: {form.company_cnpj}
+                                </span>
+                            )}
+                            {/* @ts-ignore */}
+                            {form?.sector_name && (
+                                <span className="text-[10px] sm:text-xs font-bold text-[#35b6cf] uppercase tracking-wider px-1 border-l-2 border-[#35b6cf]/30">
+                                    {/* @ts-ignore */}
+                                    Setor: {form.sector_name}
+                                </span>
+                            )}
+                        </div>
+
                         <div className="overflow-y-auto pr-2 custom-scrollbar flex-1">
                             <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">{form?.description}</p>
                         </div>
@@ -636,7 +683,27 @@ export const FormularioPublico: React.FC = () => {
 
                     {/* Header Compacto */}
                     <div className={`bg-white rounded-lg shadow-sm border border-slate-200 ${ACCENT_BORDER} p-5 sm:p-6`}>
-                        <h1 className="text-2xl font-normal text-slate-900">{form?.title}</h1>
+                        <h1 className="text-xl sm:text-2xl font-normal text-slate-900 leading-tight mb-2">{form?.title}</h1>
+                        
+                        {/* Metadados da Empresa e Setor no Header */}
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mb-1">
+                            {/* @ts-ignore */}
+                            {form?.company_cnpj && (
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 underline decoration-slate-200 underline-offset-4">
+                                    <Building2 size={10} className="text-slate-300" />
+                                    {/* @ts-ignore */}
+                                    CNPJ {form.company_cnpj}
+                                </div>
+                            )}
+                            {/* @ts-ignore */}
+                            {form?.sector_name && (
+                                <div className="text-[10px] font-bold text-[#139690] uppercase tracking-widest flex items-center gap-1.5 underline decoration-[#139690]/20 underline-offset-4">
+                                    <MapPin size={10} className="text-[#139690]/40" />
+                                    {/* @ts-ignore */}
+                                    Setor {form.sector_name}
+                                </div>
+                            )}
+                        </div>
                         {collaborator && (
                             <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-center gap-3 text-sm text-blue-800">
                                 <div className="bg-blue-100 p-2 rounded-full">
