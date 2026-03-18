@@ -7,7 +7,7 @@ import {
     MoreVertical, Edit2, Trash2, X, Check, Copy, ExternalLink,
     ChevronUp, ChevronDown, List, Type, MessageSquare, Star,
     User, Users, UserCheck, UserMinus, Calendar, Clock, ArrowLeft, ChevronRight, Split, Layout, Minimize2, AlignJustify, GripVertical, ArrowUpDown,
-    Building2, MapPin, Briefcase, Filter, Download, Play, Pause, Settings, Save, CheckCircle, AlertCircle, Send, Hash, Info, ThumbsUp, ThumbsDown, PieChart as PieChartIcon, Eye, Printer, RefreshCcw
+    Building2, MapPin, Briefcase, Filter, Download, Play, Pause, Settings, Save, CheckCircle, AlertCircle, Send, Hash, Info, ThumbsUp, ThumbsDown, PieChart as PieChartIcon, Eye, Printer, RefreshCcw, Wrench
 } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Form, FormQuestion, FormAnswer, HSEDimension, QuestionType, HSERule, HSEDiagnosticItem } from '../types';
@@ -616,9 +616,74 @@ export const Formularios: React.FC = () => {
             if (rulesError) throw rulesError;
             setHseRules(rules || []);
 
+            // Auditoria de integridade para aviso ao usuário
+            const unlinked = (qs || []).filter(q => !q.hse_dimension_id);
+            if (unlinked.length > 0 && qs?.length === 35) {
+                console.warn(`[Analytics] Alerta: ${unlinked.length} questões deste formulário HSE estão sem dimensão vinculada. Use o comando 'Reparar Vínculos' para restaurar.`);
+            }
+
         } catch (err) {
             console.error("Error loading HSE config:", err);
             alert("Erro ao carregar configurações HSE.");
+        } finally {
+            setLoadingHse(false);
+        }
+    };
+
+    const handleAutoRepairHSE = async () => {
+        if (!currentHseForm || !hseQuestions.length || !hseDimensions.length) return;
+        
+        const confirmRepair = window.confirm("Deseja restaurar automaticamente os vínculos entre estas 35 questões e as dimensões HSE padrão (Gestão, Carga, Controle, etc)? Isso corrigirá as Views vazias.");
+        if (!confirmRepair) return;
+
+        setLoadingHse(true);
+        try {
+            // Mapeamento Padrão de 35 questões para as 7 dimensões do dicionário
+            // Gestão (1-5), Carga (6-10), Controle (11-15), Apoio (16-20), Relação (21-25), Papel (26-30), Mudança (31-35)
+            const updatedQuestions = hseQuestions.map((q, idx) => {
+                const questionNum = idx + 1;
+                let dimName = '';
+                
+                if (questionNum <= 5) dimName = 'Gestão e Apoio';
+                else if (questionNum <= 10) dimName = 'Carga de Trabalho';
+                else if (questionNum <= 15) dimName = 'Controle e Autonomia';
+                else if (questionNum <= 20) dimName = 'Apoio Social';
+                else if (questionNum <= 25) dimName = 'Relacionamentos';
+                else if (questionNum <= 30) dimName = 'Papel na Organização';
+                else if (questionNum <= 35) dimName = 'Mudança';
+
+                const targetDim = hseDimensions.find(d => 
+                    d.name.toLowerCase().includes(dimName.toLowerCase())
+                );
+
+                return { ...q, hse_dimension_id: targetDim?.id || null };
+            });
+
+            // Atualiza no banco
+            for (const q of updatedQuestions) {
+                if (q.hse_dimension_id) {
+                    await supabase
+                        .from('form_questions')
+                        .update({ hse_dimension_id: q.hse_dimension_id })
+                        .eq('id', q.id);
+                }
+            }
+
+            // 2. Atualiza Respostas Órfãs (Preencher Setor faltante)
+            if (currentHseForm.setor) {
+                console.log(`[Analytics] Reparando setor (${currentHseForm.setor}) em respostas antigas...`);
+                await supabase
+                    .from('form_answers')
+                    .update({ setor: currentHseForm.setor })
+                    .eq('form_id', currentHseForm.id)
+                    .is('setor', null);
+            }
+
+            alert("Vínculos HSE e Setores restaurados com sucesso! As views do Supabase agora devem processar os dados corretamente.");
+            handleOpenHSEConfig(currentHseForm); // Recarrega
+        } catch (err) {
+            console.error("Erro no auto-reparo:", err);
+            alert("Erro ao tentar reparar vínculos.");
         } finally {
             setLoadingHse(false);
         }
@@ -1272,7 +1337,8 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                     option_4: q.option_4,
                     option_5: q.option_5,
                     min_value: q.min_value,
-                    max_value: q.max_value
+                    max_value: q.max_value,
+                    hse_dimension_id: q.hse_dimension_id || null
                 };
 
                 if (q.id) {
@@ -1708,7 +1774,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
         setCompanyUsers(filteredPopulation);
         setTotalEmployees(filteredPopulation.length);
 
-        if (filteredPopulation.length > 20) {
+        if (filteredPopulation.length > 0) {
             const stats: Record<string, number> = {};
             filteredPopulation.forEach((u: any) => {
                 const s = u.setor || 'Não Definido';
@@ -1720,116 +1786,59 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
         }
 
         // 5. HSE Logic
-        const hseQuestionsWithDim = (qData || []).filter((q: any) => q.hse_dimension_id);
-        const hasHseQuestions = hseQuestionsWithDim.length > 0;
-        
-        if (form.hse_id || hasHseQuestions) {
-            console.log('[Analytics] Renderizando lógica HSE. ID:', form.id, '| hse_id:', form.hse_id, '| Questões com dimensão:', hseQuestionsWithDim.length);
-            
-            if (!form.hse_id && hasHseQuestions) {
-                console.warn('[Analytics] Formulário tem questões com dimensão mas hse_id está ausente. Continuando mesmo assim.');
-            }
-
-            // Fetch Dimensions metadata
-            const { data: dims } = await supabase
-                .from('form_hse_dimensions')
-                .select('*');
-
-            if (dims) {
-                console.log('[Analytics] Dimensões HSE carregadas:', dims.length);
-                const mappedDims = dims.map((d: any) => ({
-                    ...d,
-                    id: d.id,
-                    is_positive: d.is_positive
-                }));
-                setHseDimensions(mappedDims);
-
-                const dimIds = mappedDims.map((d: any) => d.id);
-                if (dimIds.length > 0) {
-                    const { data: rules, error: rulesError } = await supabase
-                        .from('form_hse_rules')
-                        .select('*')
-                        .in('dimension_id', dimIds);
-
-                    if (rulesError) console.error('[Analytics] Erro ao buscar regras HSE:', rulesError);
-                    setHseRules(rules || []);
-                } else {
-                    setHseRules([]);
-                }
-            } else {
-                console.error('[Analytics] Nenhuma dimensão HSE encontrada na tabela form_hse_dimensions.');
-            }
+        if (form.hse_id) {
+            console.log('[Analytics] Carregando dados via Views Supabase para form_id:', form.id);
 
             try {
-                // 1. Fetch Diagnostic Data (Prioridade: RPC que é mais direta)
-                console.log('[Analytics] Chamando RPC get_hse_diagnostic_data para form_id:', form.id);
-                const { data: diagData, error: diagError } = await supabase
-                    .rpc('get_hse_diagnostic_data', { p_form_id: form.id });
+                // Fetch Dimensions & Rules
+                const { data: dims } = await supabase.from('form_hse_dimensions').select('*');
+                if (dims) setHseDimensions(dims);
 
-                if (diagError) {
-                    console.error('[Analytics] Erro RPC get_hse_diagnostic_data:', diagError);
-                } else if (diagData && diagData.length > 0) {
-                    console.log('[Analytics] RPC get_hse_diagnostic_data retorno:', diagData.length, 'linhas');
-                    setDiagnosticData(diagData);
-                } else {
-                    console.warn('[Analytics] RPC get_hse_diagnostic_data retornou VAZIO. Tentando View de fallback...');
-                    const { data: ddFall, error: ddErrorFall } = await supabase
-                        .from('view_hse_analise_itens')
-                        .select('*')
-                        .eq('form_id', form.id);
-                    
-                    if (!ddErrorFall && ddFall && ddFall.length > 0) {
-                        console.log('[Analytics] View view_hse_analise_itens retorno:', ddFall.length, 'linhas');
-                        setDiagnosticData(ddFall as HSEDiagnosticItem[]);
-                    } else {
-                        console.error('[Analytics] Falha total: RPC e View retornaram vazio para form_id:', form.id);
-                        setDiagnosticData([]);
-                    }
-                }
+                const { data: rules } = await supabase.from('form_hse_rules').select('*');
+                if (rules) setHseRules(rules);
 
-                // 2. Fetch Analysis View (Consolidado por dimensão)
-                const { data: analysisData, error: analysisError } = await supabase
+                // --- 1. Diagnóstico por Dimensões ---
+                const { data: ddData } = await supabase
+                    .from('view_hse_analise_itens')
+                    .select('*')
+                    .eq('form_id', form.id)
+                    .order('numero_pergunta', { ascending: true });
+                setDiagnosticData(ddData || []);
+
+                // --- 2. Análise Interpretativa (View de Dimensões) ---
+                const { data: analysisData } = await supabase
                     .from('view_hse_analise_dimensoes')
                     .select('*')
                     .eq('form_id', form.id);
+                setHseAnalytics(analysisData || []);
 
-                if (analysisError) console.error('[Analytics] Erro view_hse_analise_dimensoes:', analysisError);
-                else {
-                    console.log('[Analytics] HSE Analytics (Dimensões) loaded:', analysisData?.length || 0);
-                    setHseAnalytics(analysisData || []);
-                }
-
-                // 3. Fetch Texts (Análise e Plano de Ação Interpretados)
-                const { data: textData, error: textError } = await supabase
+                // --- 3. Textos Consolidados (Análise e Plano) ---
+                const { data: textData } = await supabase
                     .from('view_hse_texto_analise')
                     .select('texto_final_pronto')
                     .eq('form_id', form.id)
                     .maybeSingle();
-                
-                if (textError) console.error('[Analytics] Erro view_hse_texto_analise:', textError);
-                console.log('[Analytics] Interpretative Text Loaded:', !!textData?.texto_final_pronto);
                 setInterpretativeText(textData?.texto_final_pronto || '');
 
-                const { data: planData, error: planError } = await supabase
+                const { data: planData } = await supabase
                     .from('view_hse_texto_plano')
-                    .select('texto_final_pronto')
+                    .select('texto_plano_pronto')
+                    .eq('form_id', form.id)
+                    .maybeSingle();
+                setActionPlanText(planData?.texto_plano_pronto || '');
+
+                const { data: conData, error: conError } = await supabase
+                    .from('view_hse_texto_conclusao')
+                    .select('texto_conclusao_pronto')
                     .eq('form_id', form.id)
                     .maybeSingle();
                 
-                if (planError) console.error('[Analytics] Erro view_hse_texto_plano:', planError);
-                console.log('[Analytics] Action Plan Text Loaded:', !!planData?.texto_final_pronto);
-                setActionPlanText(planData?.texto_final_pronto || '');
+                if (conError) console.error('[Analytics] Erro view_hse_texto_conclusao:', conError);
+                setConclusionText(conData?.texto_conclusao_pronto || '');
 
             } catch (error) {
                 console.error('[Analytics] Erro crítico no carregamento HSE:', error);
             }
-
-            const { data: conData } = await supabase
-                .from('view_hse_texto_conclusao')
-                .select('texto_conclusao_pronto')
-                .eq('form_id', form.id)
-                .maybeSingle();
-            setConclusionText(conData?.texto_conclusao_pronto || '');
 
             // 7. Fetch Responsáveis Psicossociais
             const { data: respData, error: respError } = await supabase
@@ -1910,7 +1919,6 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                     name: nome,
                     date: a.created_at,
                     answerCount: 0,
-                    respondedorId: respondedorId,
                     setor: respondedorId ? respondentMetadata[respondedorId]?.setor : undefined,
                     cargo: respondedorId ? respondentMetadata[respondedorId]?.cargo : undefined
                 };
@@ -4972,9 +4980,21 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             <Settings className="text-slate-400" size={20} />
                             <span className="font-bold text-slate-700">Dimensões e Associação</span>
                         </div>
-                        <Button size="sm" onClick={handleCreateDimension}>
-                            <Plus size={16} /> Nova Dimensão
-                        </Button>
+                        <div className="flex gap-2">
+                            {hseQuestions.length === 35 && (
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="border-amber-500 text-amber-600 hover:bg-amber-50"
+                                    onClick={handleAutoRepairHSE}
+                                >
+                                    <Wrench size={16} className="mr-2" /> Reparar Vínculos HSE
+                                </Button>
+                            )}
+                            <Button size="sm" onClick={handleCreateDimension}>
+                                <Plus size={16} /> Nova Dimensão
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="px-4 mb-4 flex gap-2 border-b border-slate-200">

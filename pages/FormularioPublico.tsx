@@ -596,7 +596,8 @@ export const FormularioPublico: React.FC = () => {
                     form_id: form.id,
                     question_id: q.id,
                     respondedor: collaborator.id,
-                    unidade_colaborador: collaborator.unidade || null,
+                    unidade: collaborator.unidade || null,
+                    setor: collaborator.setor || null,
                     cargo: collaborator.cargo || null,
                     answer_text: (q.question_type !== 'rating') ? String(val) : null,
                     answer_number: answerNumber,
@@ -629,21 +630,24 @@ export const FormularioPublico: React.FC = () => {
         } else {
             console.log('[Submit] Respostas inseridas com sucesso!');
 
-            // Incrementa o contador de respostas do formulário (fetch + update manual)
-            // Supabase JS não suporta incremento atômico direto sem RPC,
-            // mas para o volume de uso deste sistema o race condition é aceitável
-            const { data: currentForm } = await supabase
-                .from('forms')
-                .select('qtd_respostas')
-                .eq('id', form.id)
-                .single();
+            // Incrementa o contador e dispara processamento (RPC Original)
+            const { error: rpcError } = await supabase.rpc('increment_form_responses', { form_id: form.id });
+            if (rpcError) {
+                console.warn('[Submit] Erro ao chamar RPC increment_form_responses (usando fallback manual):', rpcError.message);
+                
+                // Fallback Manual se a RPC não for encontrada
+                const { data: currentForm } = await supabase
+                    .from('forms')
+                    .select('qtd_respostas')
+                    .eq('id', form.id)
+                    .single();
 
-            // Calcula o novo total e salva de volta
-            const newCount = (currentForm?.qtd_respostas || 0) + 1;
-            await supabase
-                .from('forms')
-                .update({ qtd_respostas: newCount })
-                .eq('id', form.id);
+                const newCount = (currentForm?.qtd_respostas || 0) + 1;
+                await supabase
+                    .from('forms')
+                    .update({ qtd_respostas: newCount })
+                    .eq('id', form.id);
+            }
 
             // Marca o formulário como enviado e encerra o estado de loading
             setSubmitted(true);
