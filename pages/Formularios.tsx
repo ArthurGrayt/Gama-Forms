@@ -7,7 +7,7 @@ import {
     MoreVertical, Edit2, Trash2, X, Check, Copy, ExternalLink,
     ChevronUp, ChevronDown, List, Type, MessageSquare, Star,
     User, Users, UserCheck, UserMinus, Calendar, Clock, ArrowLeft, ChevronRight, Split, Layout, Minimize2, AlignJustify, GripVertical, ArrowUpDown,
-    Building2, MapPin, Briefcase, Filter, Download, Play, Pause, Settings, Save, CheckCircle, AlertCircle, Send, Hash, Info, ThumbsUp, ThumbsDown, PieChart as PieChartIcon, Eye, Printer
+    Building2, MapPin, Briefcase, Filter, Download, Play, Pause, Settings, Save, CheckCircle, AlertCircle, Send, Hash, Info, ThumbsUp, ThumbsDown, PieChart as PieChartIcon, Eye, Printer, RefreshCcw
 } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Form, FormQuestion, FormAnswer, HSEDimension, QuestionType, HSERule, HSEDiagnosticItem } from '../types';
@@ -902,46 +902,63 @@ export const Formularios: React.FC = () => {
         }
     }, [editingForm?.empresa]);
 
-    // Update Available Sectors when Unidade Changes
+    // Carrega os setores disponíveis para a unidade selecionada
+    // Passo 1: busca os IDs em unidade_setor | Passo 2: busca os nomes em setores
     useEffect(() => {
         const loadUnitSectors = async () => {
+            // Só executa quando há uma unidade selecionada
             if (!editingForm?.unidade_id) {
                 setAvailableSectors([]);
                 return;
             }
 
             try {
-                // Busca os IDs dos setores vinculados à unidade através da tabela pivô
-                const { data: relData, error: relError } = await supabase
+                // PASSO 1 — busca os IDs dos setores vinculados à unidade na tabela pivô
+                const { data: pivotData, error: pivotError } = await supabase
                     .from('unidade_setor')
                     .select('setor')
                     .eq('unidade', editingForm.unidade_id);
 
-                if (relError) throw relError;
-
-                const uniqueSectorIds = relData ? Array.from(new Set(relData.map(r => r.setor).filter(id => id))) : [];
-
-                if (uniqueSectorIds.length > 0) {
-                    // Busca os detalhes dos setores da tabela 'setor'
-                    const { data: sectorsData, error: sectorsError } = await supabase
-                        .from('setor')
-                        .select('*')
-                        .in('id', uniqueSectorIds)
-                        .order('nome', { ascending: true }); // Assuming 'nome' is the column for name
-
-                    if (sectorsError) throw sectorsError;
-                    setAvailableSectors(sectorsData || []);
-                } else {
+                if (pivotError) {
+                    console.error('[Setores] Erro ao buscar unidade_setor:', pivotError.message);
                     setAvailableSectors([]);
+                    return;
                 }
+
+                // Extrai os IDs únicos, removendo nulos/undefined
+                const sectorIds = Array.from(
+                    new Set((pivotData || []).map((r: any) => r.setor).filter(Boolean))
+                );
+
+                if (sectorIds.length === 0) {
+                    console.warn(`[Setores] Nenhum setor encontrado para unidade ${editingForm.unidade_id}`);
+                    setAvailableSectors([]);
+                    return;
+                }
+
+                // PASSO 2 — busca os nomes dos setores na tabela 'setor' pelos IDs coletados
+                const { data: setoresData, error: setoresError } = await supabase
+                    .from('setor')
+                    .select('id, nome')
+                    .in('id', sectorIds)
+                    .order('nome', { ascending: true });
+
+                if (setoresError) {
+                    console.error('[Setores] Erro ao buscar nomes em setores:', setoresError.message);
+                    setAvailableSectors([]);
+                    return;
+                }
+
+                console.log(`[Setores] ${(setoresData || []).length} setores carregados para unidade ${editingForm.unidade_id}`);
+                setAvailableSectors(setoresData || []);
             } catch (err) {
-                console.error("Error fetching unit sectors from colabs:", err);
+                console.error('[Setores] Erro inesperado:', err);
                 setAvailableSectors([]);
             }
         };
 
         loadUnitSectors();
-    }, [editingForm?.unidade_id, sectors]);
+    }, [editingForm?.unidade_id]);
 
 
 
@@ -1349,6 +1366,48 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
     // HSE Report Modal State
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
+    // Metadados do relatório: empresa, CNPJ e setor (buscados sob demanda)
+    const [reportEmpresaNome, setReportEmpresaNome] = useState<string>('');
+    const [reportCnpj, setReportCnpj] = useState<string>('');
+    const [reportSetorNome, setReportSetorNome] = useState<string>('');
+
+    // Busca nome da empresa, CNPJ e nome do setor para o PDF do relatório
+    const fetchReportMeta = async (form: Form) => {
+        // Zera os dados anteriores antes de buscar os novos
+        setReportEmpresaNome('');
+        setReportCnpj('');
+        setReportSetorNome('');
+
+        // Busca dados da empresa usando o ID do campo 'empresa' do formulário
+        if (form.empresa) {
+            const { data: clienteData } = await supabase
+                .from('clientes')
+                .select('nome_fantasia, razao_social, cnpj')
+                .eq('id', form.empresa)
+                .single();
+
+            // Define o nome fantasia ou razão social como fallback
+            if (clienteData) {
+                setReportEmpresaNome(clienteData.nome_fantasia || clienteData.razao_social || '');
+                setReportCnpj(clienteData.cnpj || '');
+            }
+        }
+
+        // Busca o nome do setor usando o ID do campo 'setor' do formulário
+        if (form.setor) {
+            const { data: setorData } = await supabase
+                .from('setor')
+                .select('nome')
+                .eq('id', form.setor)
+                .single();
+
+            // Define o nome do setor se encontrado
+            if (setorData) {
+                setReportSetorNome(setorData.nome || '');
+            }
+        }
+    };
+
     // Add Pending Collaborator Modal State
     const [isAddColabModalOpen, setIsAddColabModalOpen] = useState(false);
     const [newColabName, setNewColabName] = useState('');
@@ -1605,12 +1664,23 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
 
                     let validUsersForList = activeUsersData;
                     if (shouldFilterBySector) {
-                        console.log(`[Analytics] Aplicando filtro de setor "${form.setor}" aos respondentes identificados.`);
-                        validUsersForList = activeUsersData.filter((u: any) => String(u.setorid) === String(form.setor));
+                        const targetSector = String(form.setor).toLowerCase().trim();
+                        console.log(`[Analytics] Aplicando filtro de setor para: "${targetSector}"`);
+                        
+                        // Filtra por ID (string ou number) ou por nome (case-insensitive) como fallback
+                        validUsersForList = activeUsersData.filter((u: any) => 
+                            String(u.setorid) === targetSector || 
+                            String(u.setor).toLowerCase().trim() === targetSector
+                        );
+
+                        if (validUsersForList.length === 0 && activeUsersData.length > 0) {
+                            console.warn('[Analytics] Nenhum colaborador corresponde ao setor do formulário. Mantendo todos para evitar lista vazia.');
+                            validUsersForList = activeUsersData;
+                        }
 
                         const validUserIds = new Set(validUsersForList.map((u: any) => u.id));
                         finalAnswers = aData.filter((a: any) => {
-                            if (!a.respondedor) return true; // Keep anonymous
+                            if (!a.respondedor) return true; // Mantém anônimos
                             return validUserIds.has(a.respondedor);
                         });
                     }
@@ -1650,8 +1720,15 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
         }
 
         // 5. HSE Logic
-        if (form.hse_id) {
-            console.log('Fetching diagnostic data for HSE Form ID:', form.id);
+        const hseQuestionsWithDim = (qData || []).filter((q: any) => q.hse_dimension_id);
+        const hasHseQuestions = hseQuestionsWithDim.length > 0;
+        
+        if (form.hse_id || hasHseQuestions) {
+            console.log('[Analytics] Renderizando lógica HSE. ID:', form.id, '| hse_id:', form.hse_id, '| Questões com dimensão:', hseQuestionsWithDim.length);
+            
+            if (!form.hse_id && hasHseQuestions) {
+                console.warn('[Analytics] Formulário tem questões com dimensão mas hse_id está ausente. Continuando mesmo assim.');
+            }
 
             // Fetch Dimensions metadata
             const { data: dims } = await supabase
@@ -1659,6 +1736,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                 .select('*');
 
             if (dims) {
+                console.log('[Analytics] Dimensões HSE carregadas:', dims.length);
                 const mappedDims = dims.map((d: any) => ({
                     ...d,
                     id: d.id,
@@ -1673,64 +1751,78 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                         .select('*')
                         .in('dimension_id', dimIds);
 
-                    if (rulesError) console.error('Error fetching HSE rules for stats:', rulesError);
+                    if (rulesError) console.error('[Analytics] Erro ao buscar regras HSE:', rulesError);
                     setHseRules(rules || []);
                 } else {
                     setHseRules([]);
                 }
+            } else {
+                console.error('[Analytics] Nenhuma dimensão HSE encontrada na tabela form_hse_dimensions.');
             }
 
             try {
-                if (aData && aData.length > 0) {
-                    const formId = aData[0].form_id;
+                // 1. Fetch Diagnostic Data (Prioridade: RPC que é mais direta)
+                console.log('[Analytics] Chamando RPC get_hse_diagnostic_data para form_id:', form.id);
+                const { data: diagData, error: diagError } = await supabase
+                    .rpc('get_hse_diagnostic_data', { p_form_id: form.id });
 
-                    // Fetch Diagnostic Data (RPC)
-                    const { data: diagData, error: diagError } = await supabase
-                        .rpc('get_hse_diagnostic_data', { p_form_id: formId });
-
-                    if (diagError) console.error('Error fetching diagnostic data:', diagError);
-                    else setDiagnosticData(diagData || []);
-
-                    // Fetch Analysis View
-                    const { data: analysisData, error: analysisError } = await supabase
-                        .from('view_hse_analise_dimensoes')
+                if (diagError) {
+                    console.error('[Analytics] Erro RPC get_hse_diagnostic_data:', diagError);
+                } else if (diagData && diagData.length > 0) {
+                    console.log('[Analytics] RPC get_hse_diagnostic_data retorno:', diagData.length, 'linhas');
+                    setDiagnosticData(diagData);
+                } else {
+                    console.warn('[Analytics] RPC get_hse_diagnostic_data retornou VAZIO. Tentando View de fallback...');
+                    const { data: ddFall, error: ddErrorFall } = await supabase
+                        .from('view_hse_analise_itens')
                         .select('*')
-                        .eq('form_id', formId);
-
-                    if (analysisError) console.error('Error fetching analysis view:', analysisError);
-                    else setHseAnalytics(analysisData || []);
+                        .eq('form_id', form.id);
+                    
+                    if (!ddErrorFall && ddFall && ddFall.length > 0) {
+                        console.log('[Analytics] View view_hse_analise_itens retorno:', ddFall.length, 'linhas');
+                        setDiagnosticData(ddFall as HSEDiagnosticItem[]);
+                    } else {
+                        console.error('[Analytics] Falha total: RPC e View retornaram vazio para form_id:', form.id);
+                        setDiagnosticData([]);
+                    }
                 }
+
+                // 2. Fetch Analysis View (Consolidado por dimensão)
+                const { data: analysisData, error: analysisError } = await supabase
+                    .from('view_hse_analise_dimensoes')
+                    .select('*')
+                    .eq('form_id', form.id);
+
+                if (analysisError) console.error('[Analytics] Erro view_hse_analise_dimensoes:', analysisError);
+                else {
+                    console.log('[Analytics] HSE Analytics (Dimensões) loaded:', analysisData?.length || 0);
+                    setHseAnalytics(analysisData || []);
+                }
+
+                // 3. Fetch Texts (Análise e Plano de Ação Interpretados)
+                const { data: textData, error: textError } = await supabase
+                    .from('view_hse_texto_analise')
+                    .select('texto_final_pronto')
+                    .eq('form_id', form.id)
+                    .maybeSingle();
+                
+                if (textError) console.error('[Analytics] Erro view_hse_texto_analise:', textError);
+                console.log('[Analytics] Interpretative Text Loaded:', !!textData?.texto_final_pronto);
+                setInterpretativeText(textData?.texto_final_pronto || '');
+
+                const { data: planData, error: planError } = await supabase
+                    .from('view_hse_texto_plano')
+                    .select('texto_final_pronto')
+                    .eq('form_id', form.id)
+                    .maybeSingle();
+                
+                if (planError) console.error('[Analytics] Erro view_hse_texto_plano:', planError);
+                console.log('[Analytics] Action Plan Text Loaded:', !!planData?.texto_final_pronto);
+                setActionPlanText(planData?.texto_final_pronto || '');
+
             } catch (error) {
-                console.error('Error fetching HSE analysis data:', error);
+                console.error('[Analytics] Erro crítico no carregamento HSE:', error);
             }
-
-            const { data: dd, error: ddError } = await supabase
-                .from('view_hse_analise_itens')
-                .select('*')
-                .eq('form_id', form.id);
-
-            if (ddError) {
-                console.error('Error fetching diagnostic data:', ddError);
-                setDiagnosticData([]);
-            } else if (dd) {
-                console.log('Diagnostic Data Loaded:', dd);
-                setDiagnosticData(dd as HSEDiagnosticItem[]);
-            }
-
-            // Fetch Texts
-            const { data: textData } = await supabase
-                .from('view_hse_texto_analise')
-                .select('texto_final_pronto')
-                .eq('form_id', form.id)
-                .maybeSingle();
-            setInterpretativeText(textData?.texto_final_pronto || '');
-
-            const { data: planData } = await supabase
-                .from('view_hse_texto_plano')
-                .select('texto_plano_pronto')
-                .eq('form_id', form.id)
-                .maybeSingle();
-            setActionPlanText(planData?.texto_plano_pronto || '');
 
             const { data: conData } = await supabase
                 .from('view_hse_texto_conclusao')
@@ -1745,13 +1837,14 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                 .select('*')
                 .eq('form_id', form.id);
 
-            if (respError) console.error('Error fetching responsaveis:', respError);
+            if (respError) console.error('[Analytics] Erro ao buscar responsaveis:', respError);
             else setResponsaveis(respData || []);
         } else {
-            console.log('Not an HSE form (no hse_id)');
+            console.log('[Analytics] Formulário não é HSE (sem hse_id e sem questões com dimensão)');
             setDiagnosticData([]);
             setInterpretativeText('');
             setActionPlanText('');
+            setHseAnalytics([]);
             setConclusionText('');
         }
 
@@ -1783,10 +1876,11 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
     };
 
     const getRespondents = () => {
-        // Group answers by responder_identifier + created_at
-        // If identifier is missing, use 'Anônimo'
+        // Agrupa respostas por respondedor (UUID) + data de criação truncada ao minuto.
+        // Isso garante que todas as respostas de uma mesma sessão de resposta
+        // fiquem em um único grupo, mesmo sem um campo de sessão explícito.
         const groups: Record<string, {
-            id: string; // key
+            id: string;
             identifier: string;
             name: string;
             date: string;
@@ -1797,16 +1891,23 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
         }> = {};
 
         answers.forEach(a => {
-            // Create a unique key for the submission. 
-            // In a real app we'd use a submission_id. Here we assume created_at is unique per submission.
-            const key = `${a.responder_identifier || 'anon'}_${a.created_at}`;
             const respondedorId = a.respondedor;
 
+            // Chave única: UUID do respondedor + timestamp truncado ao minuto
+            // Isso agrupa todas as respostas de uma sessão sem precisar de session_id
+            const minuteKey = a.created_at ? a.created_at.substring(0, 16) : 'unknown';
+            const key = `${respondedorId || 'anon'}_${minuteKey}`;
+
             if (!groups[key]) {
+                // Nome: busca nos metadados do respondedor pelo UUID
+                const nome = (respondedorId && respondentMetadata[respondedorId]?.nome)
+                    ? respondentMetadata[respondedorId].nome
+                    : 'Anônimo';
+
                 groups[key] = {
                     id: key,
-                    identifier: a.responder_identifier || 'Anônimo',
-                    name: (respondedorId ? respondentMetadata[respondedorId]?.nome : undefined) || a.responder_name || 'Sem nome',
+                    identifier: respondedorId || 'Anônimo',
+                    name: nome,
                     date: a.created_at,
                     answerCount: 0,
                     respondedorId: respondedorId,
@@ -1821,10 +1922,12 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
     };
 
     const getRespondentAnswers = (key: string) => {
-        // Reverse engineer the key or just filter
-        const [identifierPrefix, dateSuffix] = key.split('_20'); // Simple split attempt? No, let's just filter by exact match derived from key construction
-        // Actually, just iterating is safer since we built the key from fields
-        return answers.filter(a => `${a.responder_identifier || 'anon'}_${a.created_at}` === key);
+        // Filtra respostas pelo mesmo key construído em getRespondents
+        // (respondedor_uuid + timestamp truncado ao minuto)
+        return answers.filter(a => {
+            const minuteKey = a.created_at ? a.created_at.substring(0, 16) : 'unknown';
+            return `${a.respondedor || 'anon'}_${minuteKey}` === key;
+        });
     };
 
     // Question Editor Helpers
@@ -2709,8 +2812,49 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
 
                             {/* Header */}
                             <div className="border-b border-blue-500 pb-4 mb-8">
-                                <h1 className="text-2xl font-bold text-slate-900 mb-2">Laudo de Levantamento dos Riscos Psicossociais</h1>
-                                <p className="text-sm italic text-slate-600">Ferramenta: Health and Safety Executive Indicator Tool (HSE-IT)</p>
+                                {/* Linha com título e logo lado a lado */}
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1">
+                                        {/* Título principal do laudo */}
+                                        <h1 className="text-2xl font-bold text-slate-900 mb-1">Laudo de Levantamento dos Riscos Psicossociais</h1>
+                                        {/* Subtítulo com o nome da ferramenta */}
+                                        <p className="text-sm italic text-slate-600">Ferramenta: Health and Safety Executive Indicator Tool (HSE-IT)</p>
+                                    </div>
+                                    {/* Logo da Gama Center — alinhada com os textos à direita */}
+                                    <img
+                                        src="/favicon.png"
+                                        alt="Gama Center"
+                                        style={{ height: '52px', width: 'auto', flexShrink: 0 }}
+                                    />
+                                </div>
+                            </div>
+
+
+                            {/* Bloco de identificação: empresa sempre visível, CNPJ e setor só quando há setor */}
+                            <div className="mb-8 pb-4 border-b border-slate-100">
+                                {/* Nome da empresa — exibido SEMPRE */}
+                                <p className="text-sm text-slate-700">
+                                    <span className="font-bold">Empresa: </span>
+                                    {reportEmpresaNome || '—'}
+                                </p>
+
+                                {/* CNPJ e Setor — exibidos somente quando o formulário tiver setor associado */}
+                                {reportSetorNome && (
+                                    <>
+                                        {/* CNPJ aparece junto ao setor */}
+                                        {reportCnpj && (
+                                            <p className="text-sm text-slate-700">
+                                                <span className="font-bold">CNPJ: </span>
+                                                {reportCnpj}
+                                            </p>
+                                        )}
+                                        {/* Nome do setor */}
+                                        <p className="text-sm text-slate-700">
+                                            <span className="font-bold">Setor: </span>
+                                            {reportSetorNome}
+                                        </p>
+                                    </>
+                                )}
                             </div>
 
                             {/* 1. Introdução */}
@@ -4213,9 +4357,25 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             {/* Ações Globais */}
                             <div className="flex items-center gap-3 -mr-4 sm:-mr-6 lg:-mr-8">
 
+                                <Button
+                                    variant="outline"
+                                    onClick={() => handleViewStats(analyticsForm!)}
+                                    disabled={loadingStats}
+                                    className="text-slate-600 border-slate-200 h-10 px-4"
+                                    title="Atualizar dados do servidor"
+                                >
+                                    <RefreshCcw size={18} className={`${loadingStats ? 'animate-spin' : ''}`} />
+                                    <span className="hidden sm:inline">Recarregar Dados</span>
+                                </Button>
+
                                 {analyticsTab === 'individual' && (
                                     <Button
-                                        onClick={() => setIsReportModalOpen(true)}
+                                        onClick={() => {
+                                            // Abre o modal do relatório HSE
+                                            setIsReportModalOpen(true);
+                                            // Busca os metadados de empresa, CNPJ e setor para exibir no PDF
+                                            fetchReportMeta(analyticsForm);
+                                        }}
                                         className="bg-[#139690] hover:bg-[#118580] text-white rounded-lg shadow-sm px-6 py-2.5 transition-all text-sm font-medium border-0 h-10"
                                     >
                                         <FileText size={18} className="mr-2" />
@@ -4646,8 +4806,8 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                 </div>
                             )}
 
-                            {/* Sector (Conditional) */}
-                            {requireSector && (
+                            {/* Sector — só exibe quando unidade está selecionada */}
+                            {requireSector && editingForm?.unidade_id && (
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Setor <span className="text-red-500">*</span></label>
                                     <select
@@ -4655,7 +4815,8 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                         value={editingForm?.setor || ''}
                                         onChange={(e) => {
                                             const sectorId = Number(e.target.value);
-                                            const sector = sectors.find(s => s.id === sectorId);
+                                            // Busca o setor na lista filtrada pela unidade (availableSectors)
+                                            const sector = availableSectors.find(s => s.id === sectorId);
 
                                             setEditingForm(prev => {
                                                 if (!prev) return null;
@@ -4690,9 +4851,14 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                         }}
                                     >
                                         <option value="">Selecione um setor...</option>
-                                        {(!editingForm.unidade_id ? sectors : availableSectors).map(s => (
-                                            <option key={s.id} value={s.id}>{s.nome}</option>
-                                        ))}
+                                        {/* Usa SOMENTE os setores da unidade selecionada (via tabela unidade_setor) */}
+                                        {availableSectors.length === 0 ? (
+                                            <option disabled value="">Carregando setores da unidade...</option>
+                                        ) : (
+                                            availableSectors.map(s => (
+                                                <option key={s.id} value={s.id}>{s.nome}</option>
+                                            ))
+                                        )}
                                     </select>
                                 </div>
                             )}

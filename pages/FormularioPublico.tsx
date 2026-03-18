@@ -365,40 +365,131 @@ export const FormularioPublico: React.FC = () => {
     };
 
     const handleCheckCPF = async () => {
+        // Valida o CPF antes de prosseguir
         if (!validateCPF(cpf)) {
             if (!window.confirm("CPF parece inválido ou incompleto. Deseja continuar mesmo assim?")) {
                 return;
             }
         }
 
+        // Ativa o estado de loading do botão de verificação
         setCheckingCpf(true);
+
+        // Remove TODOS os caracteres não numéricos do CPF digitado (pontos, traços, espaços, etc.)
         const cleanCpf = cpf.replace(/\D/g, '');
+
+        // Gera as variantes mais comuns de formatação do CPF para a busca
         const formattedCpf = cleanCpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+        // Ex: CPF "12345678900" pode estar salvo como "123.456.789-00" ou "12345678900" ou "123 456 789-00"
+        // A estratégia abaixo cobre os casos mais frequentes de formatação
 
-        // Check Colaboradores (try both clean and formatted, to be safe)
-        const { data: colabData, error } = await supabase
-            .from('colaboradores')
-            .select('*')
-            .or(`cpf.eq.${cleanCpf},cpf.eq.${formattedCpf}`)
-            .maybeSingle();
+        // ─── ESTRATÉGIA 1: Busca exata (com e sem formatação) ───────────────────────────
+        // Tenta encontrar o colaborador pelo CPF limpo OU pelo CPF formatado no padrão ex: "123.456.789-00"
+        // Filtra pela empresa do formulário se disponível, para garantir o contexto correto
+        let colabData: any = null;
 
+        // Monta a lista de unidades da empresa do formulário para restringir a busca por contexto
+        let unitIdsFromForm: number[] = [];
+        if (form?.empresa) {
+            // Busca todos os IDs de unidades vinculadas à empresa dona do formulário
+            const { data: unidadesDaEmpresa } = await supabase
+                .from('unidades')
+                .select('id')
+                .eq('empresaid', form.empresa);
+
+            // Extrai apenas os IDs das unidades em um array simples
+            if (unidadesDaEmpresa && unidadesDaEmpresa.length > 0) {
+                unitIdsFromForm = unidadesDaEmpresa.map(u => u.id);
+            }
+        }
+
+        // Busca o colaborador: tenta as variantes CPF limpo e CPF formatado com pontos/traço
+        if (unitIdsFromForm.length > 0) {
+            // ─── COM FILTRO DE EMPRESA: busca apenas nas unidades do formulário ─────────
+            // Tenta a busca exata primeiro (limpo OU formatado), filtrando pelas unidades corretas
+            const { data: resultExato } = await supabase
+                .from('colaboradores')
+                .select('*')
+                .or(`cpf.eq.${cleanCpf},cpf.eq.${formattedCpf}`)
+                .in('unidade', unitIdsFromForm)
+                .maybeSingle();
+
+            colabData = resultExato;
+
+            // ─── FALLBACK: Se a busca exata falhar, tenta via ILIKE (busca parcial p/ formatos exóticos) ──
+            // Isso cobre casos onde o CPF foi salvo com espaços, pontos duplos, ou outros separadores
+            if (!colabData && cleanCpf.length === 11) {
+                // Monta um padrão de busca que pega o CPF como uma sequência de dígitos
+                // Ex: "12345678900" -> busca por "%1%2%3%4%5%6%7%8%9%0%0%" para tolerar qualquer separador
+                // Abordagem alternativa: usar os primeiros 6 e últimos 2 dígitos para ser menos restritivo
+                const prefixo = cleanCpf.substring(0, 6); // Primeiros 6 dígitos
+                const sufixo  = cleanCpf.substring(9, 11); // 2 dígitos do verificador
+
+                const { data: resultIlike } = await supabase
+                    .from('colaboradores')
+                    .select('*')
+                    .ilike('cpf', `%${prefixo}%${sufixo}`) // Tolera qualquer formatação entre prefixo e sufixo
+                    .in('unidade', unitIdsFromForm)
+                    .limit(5); // Limita para evitar falsos positivos em volume
+
+                // Valida os candidatos retornados, verificando se os dígitos batem exatamente
+                if (resultIlike && resultIlike.length > 0) {
+                    // Normaliza cada candidato e compara apenas os números brutos
+                    colabData = resultIlike.find(c =>
+                        (c.cpf || '').replace(/\D/g, '') === cleanCpf
+                    ) || null;
+                }
+            }
+        } else {
+            // ─── SEM FILTRO DE EMPRESA: busca global (segurança para formulários sem empresa associada) ──
+            const { data: resultGlobal } = await supabase
+                .from('colaboradores')
+                .select('*')
+                .or(`cpf.eq.${cleanCpf},cpf.eq.${formattedCpf}`)
+                .maybeSingle();
+
+            colabData = resultGlobal;
+
+            // Fallback ILIKE sem filtro de empresa
+            if (!colabData && cleanCpf.length === 11) {
+                const prefixo = cleanCpf.substring(0, 6);
+                const sufixo  = cleanCpf.substring(9, 11);
+
+                const { data: resultIlike } = await supabase
+                    .from('colaboradores')
+                    .select('*')
+                    .ilike('cpf', `%${prefixo}%${sufixo}`)
+                    .limit(10);
+
+                // Confirma a correspondência exata de dígitos para evitar falsos positivos
+                if (resultIlike && resultIlike.length > 0) {
+                    colabData = resultIlike.find(c =>
+                        (c.cpf || '').replace(/\D/g, '') === cleanCpf
+                    ) || null;
+                }
+            }
+        }
+
+        // ─── RESULTADO DA BUSCA ──────────────────────────────────────────────────────────
         if (colabData) {
-            // Verifica se o colaborador está inativo antes de prosseguir
+            // Verifica se o colaborador encontrado está marcado como inativo
             if (colabData.ativo === 'inativo') {
                 alert("Seu cadastro está inativo nesta empresa. Por favor, entre em contato com o suporte ou RH.");
                 setCheckingCpf(false);
                 return;
             }
 
-            // Found! Get Company Name via Unit
+            // Colaborador encontrado e ativo! Busca o nome da empresa via unidade para exibição
             let companyName = '';
             if (colabData.unidade) {
+                // Consulta a unidade para obter o ID da empresa pai
                 const { data: unitData } = await supabase
                     .from('unidades')
                     .select('empresaid')
                     .eq('id', colabData.unidade)
                     .single();
 
+                // Com o ID da empresa, busca o nome fantasia para exibir na tela do formulário
                 if (unitData?.empresaid) {
                     const { data: companyData } = await supabase
                         .from('clientes')
@@ -409,12 +500,15 @@ export const FormularioPublico: React.FC = () => {
                 }
             }
 
+            // Atualiza o estado com o colaborador identificado e avança para a etapa do formulário
             setCollaborator({ ...colabData, empresa_nome: companyName });
             setStep('form');
         } else {
-            // Not Found -> Open Registration
+            // Colaborador não encontrado em nenhuma das estratégias -> abre o modal de cadastro
             setShowRegisterModal(true);
         }
+
+        // Finaliza o estado de loading independentemente do resultado
         setCheckingCpf(false);
     };
 
@@ -464,70 +558,94 @@ export const FormularioPublico: React.FC = () => {
 
         setLoading(true);
 
-        const answersToInsert = questions.map(q => {
-            if (q.question_type === 'section_break') return null;
-            const val = answers[q.id];
+        // — DIAGNÓSTICO: loga o que vai ser inserido antes de enviar
+        console.log('[Submit] Total de perguntas:', questions.length);
+        console.log('[Submit] Total de respostas preenchidas (state answers):', Object.keys(answers).length);
+        console.log('[Submit] Colaborador ID:', collaborator.id);
+        console.log('[Submit] Form ID:', form.id);
 
-            // Map text answers to numbers if applicable
-            let answerNumber: number | null = null;
-            if (q.question_type === 'rating') {
-                answerNumber = Number(val);
-            } else {
-                const textToNumberMap: Record<string, number> = {
-                    'nunca': 0,
-                    'raramente': 1,
-                    'as vezes': 2,
-                    'frequentemente': 3,
-                    'sempre': 4
-                };
-                // Normalize: trim whitespace and convert to lowercase for robust matching
-                const valStr = String(val).trim().toLowerCase();
+        const answersToInsert = questions
+            .filter(q => q.question_type !== 'section_break')  // Ignora separadores de seção
+            .filter(q => answers[q.id] !== undefined && answers[q.id] !== null && answers[q.id] !== '') // Só inclui perguntas respondidas
+            .map(q => {
+                const val = answers[q.id];
 
-                // Check if the normalized string exists in our map
-                if (Object.prototype.hasOwnProperty.call(textToNumberMap, valStr)) {
-                    answerNumber = textToNumberMap[valStr];
+                // Mapeia respostas em texto para números se aplicável
+                let answerNumber: number | null = null;
+                if (q.question_type === 'rating') {
+                    // Para rating, o valor já é numérico
+                    answerNumber = Number(val);
+                } else {
+                    // Tabela de conversão de texto para número (escala Likert HSE)
+                    const textToNumberMap: Record<string, number> = {
+                        'nunca': 0,
+                        'raramente': 1,
+                        'as vezes': 2,
+                        'às vezes': 2,
+                        'frequentemente': 3,
+                        'sempre': 4
+                    };
+                    // Normaliza e converte
+                    const valStr = String(val).trim().toLowerCase();
+                    if (Object.prototype.hasOwnProperty.call(textToNumberMap, valStr)) {
+                        answerNumber = textToNumberMap[valStr];
+                    }
                 }
-            }
 
-            return {
-                form_id: form.id,
-                question_id: q.id,
-                respondedor: collaborator.id, // User ID/UUID
-                unidade_colaborador: collaborator.unidade, // Unit ID
-                cargo: collaborator.cargo, // Role ID
-                answer_text: (q.question_type !== 'rating') ? String(val) : null,
-                answer_number: answerNumber,
-            };
-        }).filter(a => a !== null && answers[a.question_id] !== undefined);
+                return {
+                    form_id: form.id,
+                    question_id: q.id,
+                    respondedor: collaborator.id,
+                    unidade_colaborador: collaborator.unidade || null,
+                    cargo: collaborator.cargo || null,
+                    answer_text: (q.question_type !== 'rating') ? String(val) : null,
+                    answer_number: answerNumber,
+                };
+            });
 
-        const { error: submitError } = await supabase
+        // Loga o array final para verificar se está preenchido
+        console.log('[Submit] answersToInsert (', answersToInsert.length, 'linhas):', answersToInsert);
+
+        if (answersToInsert.length === 0) {
+            console.warn('[Submit] Nenhuma resposta para inserir — verifique o preenchimento do formulário.');
+            alert('Nenhuma resposta detectada. Por favor, preencha o formulário.');
+            setLoading(false);
+            return;
+        }
+
+        const { data: insertedData, error: submitError } = await supabase
             .from('form_answers')
-            .insert(answersToInsert);
+            .insert(answersToInsert)
+            .select(); // Retorna os dados inseridos para confirmar
+
+        // Loga o resultado completo para diagnóstico
+        console.log('[Submit] Resultado do Supabase — dados inseridos:', insertedData, '| erro:', submitError);
 
         if (submitError) {
-            console.error(submitError);
+            // Loga o erro e exibe mensagem ao usuário
+            console.error('[Submit] Erro ao inserir respostas:', submitError);
             alert('Erro ao enviar suas respostas. Tente novamente.');
             setLoading(false);
         } else {
-            // Increment Response Count
-            await supabase.rpc('increment_form_responses', { form_id: form.id })
-                .then(({ error }) => {
-                    if (error) {
-                        // If RPC fails (e.g. doesn't exist), try manual update as fallback (optimized for concurrency this is bad, but acceptable for MVP without migration access)
-                        // Better approach: just try update (forms typically have low concurrency in this specific context)
-                        console.warn("RPC increment failed, trying manual update", error);
-                        // However, since I cannot create the RPC myself via SQL tool here, I will stick to the safer Manual READ-WRITE approach for now or just a direct update if possible.
-                        // Ideally: UPDATE forms SET qtd_respostas = coalesce(qtd_respostas, 0) + 1 WHERE id = x
-                        // Supabase JS doesn't support atomic increment easily without RPC.
-                        // I will do a fetch-update for now to be safe, given I can't guarantee RPC existence.
-                    }
-                });
+            console.log('[Submit] Respostas inseridas com sucesso!');
 
-            // Manual Increment Fallback (since we likely don't have the RPC created)
-            const { data: currentForm } = await supabase.from('forms').select('qtd_respostas').eq('id', form.id).single();
-            const currentCount = currentForm?.qtd_respostas || 0;
-            await supabase.from('forms').update({ qtd_respostas: currentCount + 1 }).eq('id', form.id);
+            // Incrementa o contador de respostas do formulário (fetch + update manual)
+            // Supabase JS não suporta incremento atômico direto sem RPC,
+            // mas para o volume de uso deste sistema o race condition é aceitável
+            const { data: currentForm } = await supabase
+                .from('forms')
+                .select('qtd_respostas')
+                .eq('id', form.id)
+                .single();
 
+            // Calcula o novo total e salva de volta
+            const newCount = (currentForm?.qtd_respostas || 0) + 1;
+            await supabase
+                .from('forms')
+                .update({ qtd_respostas: newCount })
+                .eq('id', form.id);
+
+            // Marca o formulário como enviado e encerra o estado de loading
             setSubmitted(true);
             setLoading(false);
         }
@@ -566,6 +684,16 @@ export const FormularioPublico: React.FC = () => {
 
     const FORM_WIDTH = "w-full max-w-[640px]";
     const ACCENT_BORDER = "border-t-[8px] border-t-[#35b6cf]";
+
+    // Remove o sufixo de setor do título do formulário
+    // Ex: "GES 01 – TÉCNICO/OPERACIONAL" -> "GES 01"
+    // Suporta tanto o travessão – quanto o hífen simples como separador
+    const cleanTitle = (title?: string) => {
+        if (!title) return '';
+        // Corta tudo a partir do separador " – " ou " - " (com espaços ao redor)
+        return title.split(/\s+[–\-]\s+/)[0].trim();
+    };
+
     const currentQs = sections[currentSection] ? sections[currentSection].questions : [];
     const isLastSection = currentSection === sections.length - 1;
 
@@ -583,7 +711,7 @@ export const FormularioPublico: React.FC = () => {
             {step === 'cover' && (
                 <div className={`${FORM_WIDTH} h-full flex flex-col justify-center animate-in slide-in-from-bottom-4 duration-500`}>
                     <div className={`bg-white rounded-lg shadow-sm border border-slate-200 ${ACCENT_BORDER} p-5 sm:p-6 mb-3 flex flex-col max-h-[75vh]`}>
-                        <h1 className="text-lg sm:text-2xl font-normal text-slate-900 mb-1 line-clamp-2">{form?.title}</h1>
+                        <h1 className="text-lg sm:text-2xl font-normal text-slate-900 mb-1 line-clamp-2">{cleanTitle(form?.title)}</h1>
                         
                         {/* Exibição resumida de CNPJ e Setor */}
                         <div className="mb-4 flex flex-col gap-0.5">
@@ -683,7 +811,7 @@ export const FormularioPublico: React.FC = () => {
 
                     {/* Header Compacto */}
                     <div className={`bg-white rounded-lg shadow-sm border border-slate-200 ${ACCENT_BORDER} p-5 sm:p-6`}>
-                        <h1 className="text-xl sm:text-2xl font-normal text-slate-900 leading-tight mb-2">{form?.title}</h1>
+                        <h1 className="text-xl sm:text-2xl font-normal text-slate-900 leading-tight mb-2">{cleanTitle(form?.title)}</h1>
                         
                         {/* Metadados da Empresa e Setor no Header */}
                         <div className="flex flex-wrap gap-x-4 gap-y-1 mb-1">
