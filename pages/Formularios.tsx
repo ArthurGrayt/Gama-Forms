@@ -553,6 +553,7 @@ export const Formularios: React.FC = () => {
     const [inactiveColabsCount, setInactiveColabsCount] = useState<number>(0);
     const [targetColabsCount, setTargetColabsCount] = useState<number | null>(null);
     const [requireSector, setRequireSector] = useState(false);
+    const [divideBySector, setDivideBySector] = useState(false);
 
     // HSE Config State
     const [hseModalOpen, setHseModalOpen] = useState(false);
@@ -954,11 +955,15 @@ export const Formularios: React.FC = () => {
                 const totalActive = activeCount || 0;
                 setColabsCount(totalActive);
                 setInactiveColabsCount(inactiveCount || 0);
-                setRequireSector(totalActive > 20);
+                
+                const isLarge = totalActive > 20;
+                setRequireSector(isLarge);
+                setDivideBySector(isLarge); // Por padrão, se for grande (> 20), sugere dividir por setor
             } else {
                 setColabsCount(0);
                 setInactiveColabsCount(0);
                 setRequireSector(false);
+                setDivideBySector(false);
             }
         };
 
@@ -1257,8 +1262,8 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
             return;
         }
 
-        if (requireSector && !editingForm.setor) {
-            alert('A empresa selecionada possui mais de 20 colaboradores. Por favor, selecione um setor.');
+        if (divideBySector && !editingForm.setor) {
+            alert('Você optou por dividir por setor, mas nenhum setor foi selecionado. Por favor, selecione um setor ou desative a divisão por setor.');
             return;
         }
 
@@ -1384,9 +1389,17 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
             // Update list without full refetch if possible, or just fetch
             fetchForms();
         } else {
-            alert('Formulário salvo, mas erro ao recarregar dados. Por favor, reabra o editor.');
             setIsEditorOpen(false);
             fetchForms();
+        }
+    };
+
+    // Função para tratar a mudança no checkbox de dividir por setor
+    const handleToggleDivideBySector = (checked: boolean) => {
+        setDivideBySector(checked);
+        if (!checked) {
+            // Se desmarcar, limpa o setor do formulário
+            setEditingForm(prev => prev ? { ...prev, setor: undefined } : null);
         }
     };
 
@@ -4810,12 +4823,25 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                             No Setor: {targetColabsCount}
                                         </span>
                                     )}
-                                    {colabsCount > 20 && <span className="text-amber-600 text-xs font-bold bg-amber-50 px-2 py-0.5 rounded">Setor Obrigatório</span>}
+                                    {colabsCount > 20 && (
+                                        <div className="flex items-center gap-2 bg-amber-50 px-2 py-1 rounded border border-amber-100">
+                                            <input 
+                                                type="checkbox" 
+                                                id="divide-sector-toggle"
+                                                checked={divideBySector}
+                                                onChange={(e) => handleToggleDivideBySector(e.target.checked)}
+                                                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <label htmlFor="divide-sector-toggle" className="text-amber-700 text-xs font-bold cursor-pointer select-none">
+                                                Dividir por Setor
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
-                            {/* Sector — só exibe quando unidade está selecionada */}
-                            {requireSector && editingForm?.unidade_id && (
+                            {/* Sector — exibe quando a unidade está selecionada e o usuário optou por dividir por setor */}
+                            {divideBySector && editingForm?.unidade_id && (
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Setor <span className="text-red-500">*</span></label>
                                     <select
