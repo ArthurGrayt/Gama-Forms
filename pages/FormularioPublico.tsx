@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { Form, FormQuestion, Collaborator } from '../types';
 import { CheckCircle, Check, AlertCircle, ChevronRight, Send, Star, User, Hash, ChevronDown, Building2, MapPin, Briefcase, Search, Plus } from 'lucide-react';
+import FacialPermission from './FacialPermission';
 
 const LoadingScreen = () => (
     <div className="fixed inset-0 bg-gray-50 z-50 flex items-center justify-center font-sans antialiased">
@@ -230,7 +231,8 @@ export const FormularioPublico: React.FC = () => {
 
     // Form State
     const [answers, setAnswers] = useState<Record<number, any>>({});
-    const [step, setStep] = useState<'cover' | 'cpf_check' | 'form'>('cover');
+    // Adicionado o step 'facial_verification' para o fluxo de reconhecimento facial/termos
+    const [step, setStep] = useState<'cover' | 'cpf_check' | 'facial_verification' | 'form'>('cover');
     const [currentSection, setCurrentSection] = useState(0);
 
     const sections = React.useMemo(() => {
@@ -500,9 +502,9 @@ export const FormularioPublico: React.FC = () => {
                 }
             }
 
-            // Atualiza o estado com o colaborador identificado e avança para a etapa do formulário
+            // Atualiza o estado com o colaborador identificado e avança para a etapa de verificação facial
             setCollaborator({ ...colabData, empresa_nome: companyName });
-            setStep('form');
+            setStep('facial_verification');
         } else {
             // Colaborador não encontrado em nenhuma das estratégias -> abre o modal de cadastro
             setShowRegisterModal(true);
@@ -515,7 +517,8 @@ export const FormularioPublico: React.FC = () => {
     const handleRegistrationSuccess = (newColab: Collaborator) => {
         setCollaborator(newColab);
         setShowRegisterModal(false);
-        setStep('form');
+        // Após o cadastro, o usuário também deve passar pela verificação facial
+        setStep('facial_verification');
     };
 
     const handleAnswerChange = (questionId: number, value: any) => {
@@ -813,6 +816,16 @@ export const FormularioPublico: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* ETAPA 0.75: BIOMETRIA FACIAL AVANÇADA (TensorFlow.js) */}
+            {step === 'facial_verification' && (
+                <FacialPermission 
+                    // Avança para o preenchimento do formulário após sucesso na captura biométrica
+                    onAccept={() => setStep('form')}
+                    // Retorna para a identificação por CPF caso o usuário cancele ou ocorra erro
+                    onDecline={() => setStep('cpf_check')}
+                />
             )}
 
             {/* STEP 1: FORM */}
