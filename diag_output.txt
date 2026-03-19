@@ -1,0 +1,106 @@
+﻿=== DIAGN├ôSTICO DE DIMENS├òES HSE POR FORMUL├üRIO ===
+
+Dimens├Áes cadastradas no banco:
+  ID 1: Demandas
+  ID 2: Controle
+  ID 3: Apoio da Chefia
+  ID 4: Apoio dos Colegas
+  ID 5: Relacionamentos
+  ID 6: Cargo
+  ID 7: Comunica├º├úo e Mudan├ºas
+
+Total de formul├írios HSE: 31
+
+=== FORMUL├üRIOS COM PROBLEMAS (< 7 DIMENS├òES) ===
+
+ID 50: "Levantamento Preliminar Psicossocial - Gama center - 52"
+  ÔåÆ 0 dims vinculadas, 35 quest├Áes sem dim
+  ÔåÆ View retornou: 0 dims [(vazio)]
+
+ID 52: "Levantamento Preliminar Psicossocial - PADARIA P├âES DE "
+  ÔåÆ 0 dims vinculadas, 35 quest├Áes sem dim
+  ÔåÆ View retornou: 0 dims [(vazio)]
+
+ID 54: "Levantamento Preliminar Psicossocial - Real Power Group"
+  ÔåÆ 0 dims vinculadas, 35 quest├Áes sem dim
+  ÔåÆ View retornou: 0 dims [(vazio)]
+
+ID 55: "Levantamento Preliminar Psicossocial - Real Eletrica e "
+  ÔåÆ 0 dims vinculadas, 35 quest├Áes sem dim
+  ÔåÆ View retornou: 0 dims [(vazio)]
+
+ID 56: "Levantamento Preliminar Psicossocial - LOPES PRESTACAO "
+  ÔåÆ 2 dims vinculadas, 25 quest├Áes sem dim
+  ÔåÆ View retornou: 0 dims [(vazio)]
+
+ID 62: "Levantamento Preliminar Psicossocial - M. JR SOLUCOES L"
+  ÔåÆ 0 dims vinculadas, 35 quest├Áes sem dim
+  ÔåÆ View retornou: 0 dims [(vazio)]
+
+ID 64: "Levantamento Preliminar Psicossocial - DORINETE DOLAVAL"
+  ÔåÆ 2 dims vinculadas, 25 quest├Áes sem dim
+  ÔåÆ View retornou: 0 dims [(vazio)]
+
+=== TODOS OS FORMUL├üRIOS ===
+Ô£à ID 2: "Levantamento Preliminar Psicossocial - RN ADMINISTRADOR"
+     View: 0 dims
+Ô£à ID 9: "Levantamento Preliminar Psicossocial - F├íbrica Criativa"
+     View: 0 dims
+Ô£à ID 11: "Levantamento Preliminar Psicossocial -Embalart - PRODU├ç"
+     View: 0 dims
+Ô£à ID 17: "Levantamento Preliminar Psicossocial -Samanta Rezende"
+     View: 0 dims
+Ô£à ID 20: "Levantamento Preliminar Psicossocial - PRISMA 360 PRODU"
+     View: 0 dims
+Ô£à ID 21: "Levantamento Preliminar Psicossocial - CASA JARDIM PISC"
+     View: 0 dims
+Ô£à ID 24: "Levantamento Preliminar Psicossocial - FUNDEPAR INVESTI"
+     View: 0 dims
+Ô£à ID 26: "Levantamento Preliminar Psicossocial -  FUNDEP PARTICIP"
+     View: 0 dims
+Ô£à ID 27: "Levantamento Preliminar Psicossocial - A├çOUGUE DO MAURO"
+     View: 0 dims
+Ô£à ID 28: "Levantamento Preliminar Psicossocial -  INSTITUTO GERA├ç"
+     View: 0 dims
+Ô£à ID 29: "Levantamento Preliminar Psicossocial -  CLINICOR"
+     View: 0 dims
+Ô£à ID 30: "Levantamento Preliminar Psicossocial -  SCATOLA TECNOLO"
+     View: 0 dims
+Ô£à ID 31: "Levantamento Preliminar Psicossocial -  CASA DE RETALHO"
+     View: 0 dims
+Ô£à ID 33: "NOVO! Levantamento Preliminar Psicossocial -  SS INSTAL"
+     View: 0 dims
+Ô£à ID 35: "Levantamento Preliminar Psicossocial -  ARMANDO ROGERIO"
+     View: 0 dims
+Ô£à ID 36: "Levantamento Preliminar Psicossocial -  TSA SAT"
+     View: 0 dims
+Ô£à ID 37: "Levantamento Preliminar Psicossocial -  MT COSM├ëTICOS L"
+     View: 0 dims
+Ô£à ID 38: "Levantamento Preliminar Psicossocial -  TRIP CONECTION "
+     View: 0 dims
+Ô£à ID 42: "Levantamento Preliminar Psicossocial -  ANCAR AUTOMOTIV"
+     View: 0 dims
+Ô£à ID 43: "Levantamento Preliminar Psicossocial -  RLS SISTEMAS DE"
+     View: 0 dims
+Ô£à ID 44: "Levantamento Preliminar Psicossocial -  MARMORARIA IMP├ë"
+     View: 0 dims
+Ô£à ID 48: "Levantamento Preliminar Psicossocial - SUPERMERCADO SAN"
+     View: 0 dims
+ÔØî(0dims) ID 50: "Levantamento Preliminar Psicossocial - Gama center - 52"
+     View: 0 dims
+ÔØî(0dims) ID 52: "Levantamento Preliminar Psicossocial - PADARIA P├âES DE "
+     View: 0 dims
+Ô£à ID 53: "Levantamento Preliminar Psicossocial - ELETROMINAS COME"
+     View: 0 dims
+ÔØî(0dims) ID 54: "Levantamento Preliminar Psicossocial - Real Power Group"
+     View: 0 dims
+ÔØî(0dims) ID 55: "Levantamento Preliminar Psicossocial - Real Eletrica e "
+     View: 0 dims
+ÔØî(2dims) ID 56: "Levantamento Preliminar Psicossocial - LOPES PRESTACAO "
+     View: 0 dims
+ÔØî(0dims) ID 62: "Levantamento Preliminar Psicossocial - M. JR SOLUCOES L"
+     View: 0 dims
+Ô£à ID 63: "Levantamento Preliminar Psicossocial - PEDREIRA VARGEM "
+     View: 0 dims
+ÔØî(2dims) ID 64: "Levantamento Preliminar Psicossocial - DORINETE DOLAVAL"
+     View: 0 dims

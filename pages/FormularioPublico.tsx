@@ -593,13 +593,19 @@ export const FormularioPublico: React.FC = () => {
                 }
 
                 return {
+                    // ID do formulário pai
                     form_id: form.id,
+                    // ID da pergunta correspondente
                     question_id: q.id,
+                    // UUID do colaborador que respondeu
                     respondedor: collaborator.id,
-                    unidade: collaborator.unidade || null,
-                    setor: collaborator.setor || null,
+                    // ID da unidade (mapeado para unidade_colaborador no banco)
+                    unidade_colaborador: collaborator.unidade || null,
+                    // ID do cargo
                     cargo: collaborator.cargo || null,
+                    // Conteúdo da resposta em texto
                     answer_text: (q.question_type !== 'rating') ? String(val) : null,
+                    // Valor numérico da resposta (escala HSE)
                     answer_number: answerNumber,
                 };
             });
