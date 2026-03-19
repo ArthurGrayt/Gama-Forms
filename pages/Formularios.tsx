@@ -1184,12 +1184,22 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
         if (!confirm('Tem certeza que deseja excluir este formulário? Todas as respostas serão perdidas.')) return;
 
         try {
+            console.log('[Delete] Tentando excluir formulário ID:', id);
+            if (!supabase) {
+                console.error('[Delete] Client Supabase não está inicializado!');
+                alert('Erro interno: Cliente de banco não disponível.');
+                return;
+            }
             const { error } = await supabase.from('forms').delete().eq('id', id);
-            if (error) throw error;
+            if (error) {
+                console.error('[Delete] Erro retornado pelo Supabase:', error);
+                throw error;
+            }
+            console.log('[Delete] Exclusão bem-sucedida!');
             fetchForms();
         } catch (error) {
             console.error('Error deleting form:', error);
-            alert('Erro ao excluir formulário');
+            alert('Erro ao excluir formulário: Verifique sua conexão ou se o formulário já foi excluído.');
         }
     };
 
@@ -3743,17 +3753,20 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                                                                     const total = qAnswers.length || 1;
                                                                                     const reportBuckets: { label: string, count: number, perc: number }[] = [];
 
-                                                                                    if (question.question_type === 'rating' || question.question_type === 'choice' || question.question_type === 'select') {
-                                                                                        // Assuming standard 5 options 0-4 or text match like in Overview
-                                                                                        const counts = [0, 0, 0, 0, 0];
-                                                                                        const labels = ['Nunca', 'Raramente', 'Às vezes', 'Frequentemente', 'Sempre'];
+                                                                                        if (question.question_type === 'rating' || question.question_type === 'choice' || question.question_type === 'select') {
+                                                                                            // Build labels array dynamically from available options or defaults
+                                                                                            const rawLabels = [
+                                                                                                question.option_1 || 'Nunca',
+                                                                                                question.option_2 || 'Raramente',
+                                                                                                question.option_3 || 'Às vezes',
+                                                                                                question.option_4 || 'Frequentemente',
+                                                                                                question.option_5 || 'Sempre'
+                                                                                            ];
 
-                                                                                        // Overwrite labels if custom options
-                                                                                        if (question.option_1) labels[0] = question.option_1;
-                                                                                        if (question.option_2) labels[1] = question.option_2;
-                                                                                        if (question.option_3) labels[2] = question.option_3;
-                                                                                        if (question.option_4) labels[3] = question.option_4;
-                                                                                        if (question.option_5) labels[4] = question.option_5;
+                                                                                            // Only use as many labels as there are options defined in DB or default to 5
+                                                                                            const numOptions = [question.option_1, question.option_2, question.option_3, question.option_4, question.option_5].filter(Boolean).length || 5;
+                                                                                            const labels = rawLabels.slice(0, numOptions);
+                                                                                            const counts = new Array(labels.length).fill(0);
 
                                                                                         qAnswers.forEach(a => {
                                                                                             const val = Number(a.answer_number ?? -1);
