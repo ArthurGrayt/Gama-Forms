@@ -2797,7 +2797,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
                                             pagebreak: {
                                                 mode: ['css', 'legacy'],
-                                                avoid: ['li', 'tr', '.break-inside-avoid', 'h1', 'h2', 'h3', 'p']
+                                                avoid: ['li', 'tr', '.break-inside-avoid']
                                             }
                                         };
 
@@ -2862,7 +2862,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
 
 
                             {/* Bloco de identificação: empresa sempre visível, CNPJ e setor só quando há setor */}
-                            <div className="mb-8 pb-4 border-b border-slate-100">
+                            <div className="mb-6 pb-4 border-b border-slate-100">
                                 {/* Nome da empresa — exibido SEMPRE */}
                                 <p className="text-sm text-slate-700">
                                     <span className="font-bold">Empresa: </span>
@@ -2889,8 +2889,8 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             </div>
 
                             {/* 1. Introdução */}
-                            <div className="mb-8 break-inside-avoid" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                <h2 className="text-lg font-bold text-blue-800 mb-3">1. Introdução</h2>
+                            <div className="mb-8">
+                                <h2 className="text-lg font-bold text-blue-800 mb-3" style={{ breakAfter: 'avoid' }}>1. Introdução</h2>
                                 <p className="mb-4 text-justify">
                                     Este laudo apresenta os resultados da avaliação psicossocial realizada com base no questionário HSE Indicator Tool (HSE-IT), que contempla 35 itens distribuídos em 7 dimensões: Demandas, Controle, Apoio da Chefia, Apoio dos Colegas, Relacionamentos, Cargo e Comunicação/Mudanças.
                                 </p>
@@ -2900,8 +2900,8 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             </div>
 
                             {/* 2. Metodologia */}
-                            <div className="mb-0 break-inside-avoid" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                <h2 className="text-lg font-bold text-blue-800 mb-3">2. Metodologia</h2>
+                            <div className="mb-16">
+                                <h2 className="text-lg font-bold text-blue-800 mb-3" style={{ breakAfter: 'avoid' }}>2. Metodologia</h2>
 
                                 <div className="mb-6">
                                     <p className="font-bold mb-2">Escala de respostas utilizada:</p>
@@ -2961,16 +2961,15 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             </div>
 
                             {/* 3. Resultados por Item (diagnóstico detalhado) */}
-                            {/* Force Page 2 here */}
-                            <div className="mb-0 pb-0" style={{ breakBefore: 'page', pageBreakBefore: 'always', marginBottom: 0, paddingBottom: 0 }}>
-                                <h2 className="text-lg font-bold text-blue-600 mb-3" style={{ marginTop: 0 }}>3. Resultados por Item (diagnóstico detalhado)</h2>
+                            <div className="mb-0 pb-0" style={{ marginTop: '2rem', marginBottom: 0, paddingBottom: 0 }}>
+                                <h2 className="text-lg font-bold text-blue-600 mb-3" style={{ breakAfter: 'avoid', pageBreakAfter: 'avoid', marginTop: 0 }}>3. Resultados por Item (diagnóstico detalhado)</h2>
                                 <div className="space-y-6">
                                     {Object.entries(diagnosticData.reduce((acc, item) => {
                                         const dimId = item.dimensao_id;
                                         if (!acc[dimId]) acc[dimId] = [];
                                         acc[dimId].push(item);
                                         return acc;
-                                    }, {} as Record<number, HSEDiagnosticItem[]>)).map(([dimId, items], index) => {
+                                    }, {} as Record<number, HSEDiagnosticItem[]>)).map(([dimId, items]) => {
                                         const typedItems = items as HSEDiagnosticItem[];
                                         const firstItem = typedItems[0];
                                         const dim = hseDimensions.find(d => d.id === Number(dimId));
@@ -2979,9 +2978,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                         const isPositive = dim?.is_positive || false;
 
                                         return (
-                                            <div key={dimId} className="break-inside-avoid" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                                 {/* Force Page 3 after the 3rd dimension (approx. middle of 7 dimensions) */}
-                                                 {index === 3 && <div style={{ breakBefore: 'page', pageBreakBefore: 'always' }} />}
+                                            <div key={dimId} style={isRelacionamentos ? { marginTop: '6rem' } : {}}>
                                                 <h3 className="font-bold text-blue-600 mb-2 mt-4 text-base" style={{ breakAfter: 'avoid', pageBreakAfter: 'avoid' }}>
                                                     Dimensão {dimName} <span className="text-sm font-normal text-blue-400 hover:text-blue-500 underline decoration-blue-300 decoration-1 underline-offset-2">({isPositive ? 'quanto maior, melhor' : 'quanto menor, melhor'})</span>
                                                 </h3>
@@ -3006,9 +3003,8 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             </div>
 
                             {/* 4. Resultados por Dimensão (diagnóstico consolidado) */}
-                            {/* Force Page 4 here */}
-                            <div className="mb-4 break-inside-avoid" style={{ breakBefore: 'page', pageBreakBefore: 'always', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                <h2 className="text-lg font-bold text-blue-800 mb-4">4. Resultados por Dimensão (diagnóstico consolidado)</h2>
+                            <div className="mb-24" style={{ marginTop: '3rem' }}>
+                                <h2 className="text-lg font-bold text-blue-800 mb-4" style={{ breakAfter: 'avoid', pageBreakAfter: 'avoid' }}>4. Resultados por Dimensão (diagnóstico consolidado)</h2>
 
                                 <div className="grid grid-cols-2 gap-4 text-xs">
                                     {/* Header */}
@@ -3085,14 +3081,13 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             </div>
 
                             {/* 5. Análise Interpretativa */}
-                            <div className="mb-0 break-inside-avoid" style={{ marginTop: '2rem', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                <h2 className="text-lg font-bold text-blue-800 mb-2">5. Análise Interpretativa</h2>
+                            <div className="mb-2" style={{ marginTop: '4rem' }}>
+                                <h2 className="text-lg font-bold text-blue-800 mb-2" style={{ breakAfter: 'avoid', pageBreakAfter: 'avoid' }}>5. Análise Interpretativa</h2>
                                 <div className="text-slate-800 text-sm leading-relaxed text-justify">
                                     {interpretativeText ? (
-                                        interpretativeText.replace(/fragilidade/gi, 'exposição').split('\n').map((line, idx) => {
+                                        interpretativeText.replace(/fragilidade/gi, 'exposição').split('\n').filter(l => l.trim()).map((line, idx) => {
                                             // Strip HTML bold tags if present
                                             const cleanText = line.replace(/<\/?b>/gi, '').trim();
-                                            if (!cleanText) return <br key={idx} />;
 
                                             // Bold headers logic (case insensitive check for safety)
                                             const lowerText = cleanText.toLowerCase();
@@ -3121,10 +3116,10 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                             }
 
                                             if (isHeader) {
-                                                return <p key={idx} className="font-bold text-slate-900 mt-3 mb-1">{cleanText}</p>;
+                                                return <p key={idx} className="font-bold text-slate-900 mt-2 mb-0.5 uppercase tracking-tight">{cleanText}</p>;
                                             }
 
-                                            return <p key={idx} className="mb-1">{content}</p>;
+                                            return <p key={idx} className="mb-0.5">{content}</p>;
                                         })
                                     ) : (
                                         <p className="text-slate-400 italic">Nenhuma análise gerada ou disponível ainda.</p>
@@ -3133,16 +3128,14 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             </div>
 
                             {/* 6. Recomendações de Plano de Ação */}
-                            {/* Force Page 5 here */}
-                            <div className="mb-8 break-inside-avoid" style={{ breakBefore: 'page', pageBreakBefore: 'always', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                <h2 className="text-lg font-bold text-blue-800 mb-2">6. Recomendações de Plano de Ação</h2>
+                            <div className="mb-2">
+                                <h2 className="text-lg font-bold text-blue-800 mb-2" style={{ breakAfter: 'avoid' }}>6. Recomendações de Plano de Ação</h2>
                                 <div className="text-slate-800 text-sm leading-relaxed text-justify">
                                     {actionPlanText ? (
-                                        actionPlanText.replace(/fragilidade/gi, 'exposição').split('\n').map((line, idx) => {
+                                        actionPlanText.replace(/fragilidade/gi, 'exposição').split('\n').filter(l => l.trim()).map((line, idx) => {
                                             // Handle HTML bold tags <b>text</b>
                                             // We won't strip them anymore, we'll parse them.
                                             const rawLine = line.trim();
-                                            if (!rawLine) return <br key={idx} />;
 
                                             // Helper to parse line with <b> tags
                                             const parseBold = (text: string) => {
@@ -3164,7 +3157,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                                 cleanText.match(/:+$/); // Ends with : or ::
 
                                             if (isHeader) {
-                                                return <p key={idx} className="font-bold text-slate-900 mt-3 mb-1">{parseBold(rawLine)}</p>;
+                                                return <p key={idx} className="font-bold text-slate-900 mt-0.5 mb-0">{parseBold(rawLine)}</p>;
                                             }
 
                                             // Parsing for Inline Titles (Dimensions or "Title:")
@@ -3201,7 +3194,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                                 }
                                             }
 
-                                            return <p key={idx} className="mb-1">{content}</p>;
+                                            return <p key={idx} className="mb-0.5">{content}</p>;
                                         })
                                     ) : (
                                         <p className="text-slate-400 italic">Nenhum plano de ação gerado ou disponível ainda.</p>
@@ -3210,24 +3203,23 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             </div>
 
                             {/* 7. Conclusão */}
-                            <div className="mb-8 break-inside-avoid" style={{ marginTop: '2rem', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                <h2 className="text-lg font-bold text-blue-800 mb-2">7. Conclusão</h2>
+                            <div className="mb-8" >
+                                <h2 className="text-lg font-bold text-blue-800 mb-2" style={{ breakAfter: 'avoid' }}>7. Conclusão</h2>
                                 <div className="text-slate-800 text-sm leading-relaxed text-justify">
                                     {conclusionText ? (
-                                        conclusionText.replace(/fragilidade/gi, 'exposição').split('\n').map((line, idx) => {
+                                        conclusionText.replace(/fragilidade/gi, 'exposição').split('\n').filter(l => l.trim()).map((line, idx) => {
                                             // Strip HTML bold tags if present
                                             const cleanText = line.replace(/<\/?b>/gi, '').trim();
-                                            if (!cleanText) return <br key={idx} />;
 
                                             // Bold headers logic
                                             const lowerText = cleanText.toLowerCase();
                                             const isHeader = cleanText.match(/:+$/); // Ends with : or ::
 
                                             if (isHeader) {
-                                                return <p key={idx} className="font-bold text-slate-900 mt-3 mb-1">{cleanText}</p>;
+                                                return <p key={idx} className="font-bold text-slate-900 mt-2 mb-0.5">{cleanText}</p>;
                                             }
 
-                                            return <p key={idx} className="mb-1">{cleanText}</p>;
+                                            return <p key={idx} className="mb-0.5">{cleanText}</p>;
                                         })
                                     ) : (
                                         <p className="text-slate-400 italic">Nenhuma conclusão gerada ou disponível ainda.</p>
