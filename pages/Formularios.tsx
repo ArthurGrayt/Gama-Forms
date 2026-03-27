@@ -1461,38 +1461,62 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
     const [reportCnpj, setReportCnpj] = useState<string>('');
     const [reportSetorNome, setReportSetorNome] = useState<string>('');
 
-    // Busca nome da empresa, CNPJ e nome do setor para o PDF do relatório
+    // Função para buscar metadados do relatório: nome da empresa, CNPJ e nome do setor
     const fetchReportMeta = async (form: Form) => {
-        // Zera os dados anteriores antes de buscar os novos
+        // Zera os estados de nome da empresa antes de iniciar a nova busca
         setReportEmpresaNome('');
+        // Zera o estado do CNPJ para garantir que dados antigos não apareçam
         setReportCnpj('');
+        // Zera o nome do setor no estado local
         setReportSetorNome('');
 
-        // Busca dados da empresa usando o ID do campo 'empresa' do formulário
-        if (form.empresa) {
-            const { data: clienteData } = await supabase
-                .from('clientes')
-                .select('nome_fantasia, razao_social, cnpj')
-                .eq('id', form.empresa)
-                .single();
+        // Tenta obter o ID da empresa do objeto 'form'; se não existir, tenta buscar via 'unidade_id'
+        let empresaId = form.empresa;
+        // Verifica se o ID da empresa está ausente mas existe um ID de unidade vinculado
+        if (!empresaId && form.unidade_id) {
+            // Faz uma consulta ao Supabase na tabela 'unidades' para encontrar o ID da empresa associada
+            const { data: unitData } = await supabase
+                .from('unidades') // Tabela de unidades
+                .select('empresaid') // Seleciona apenas a coluna do ID da empresa
+                .eq('id', form.unidade_id) // Filtra pelo ID da unidade do formulário
+                .single(); // Espera apenas um resultado
+            
+            // Se encontrar os dados da unidade, define o 'empresaId' com o valor retornado
+            if (unitData) {
+                empresaId = unitData.empresaid;
+            }
+        }
 
-            // Define o nome fantasia ou razão social como fallback
+        // Se tivermos um ID de empresa válido (seja do formulário ou da unidade)
+        if (empresaId) {
+            // Busca as informações cadastrais (nome e CNPJ) na tabela de clientes
+            const { data: clienteData } = await supabase
+                .from('clientes') // Tabela de clientes (empresas)
+                .select('nome_fantasia, razao_social, cnpj') // Campos necessários para o relatório
+                .eq('id', empresaId) // Filtra pelo ID da empresa determinado anteriormente
+                .single(); // Espera apenas um resultado
+
+            // Verifica se os dados do cliente foram retornados com sucesso
             if (clienteData) {
+                // Define o nome da empresa priorizando o nome fantasia, com fallback para a razão social
                 setReportEmpresaNome(clienteData.nome_fantasia || clienteData.razao_social || '');
+                // Define o CNPJ da empresa no estado para exibição no PDF
                 setReportCnpj(clienteData.cnpj || '');
             }
         }
 
-        // Busca o nome do setor usando o ID do campo 'setor' do formulário
+        // Verifica se o formulário possui um setor vinculado para buscar seu nome amigável
         if (form.setor) {
+            // Realiza a busca na tabela 'setor' para obter o nome correspondente ao ID
             const { data: setorData } = await supabase
-                .from('setor')
-                .select('nome')
-                .eq('id', form.setor)
-                .single();
+                .from('setor') // Tabela de setores
+                .select('nome') // Seleciona apenas o nome do setor
+                .eq('id', form.setor) // Filtra pelo ID do setor presente no formulário
+                .single(); // Espera apenas um resultado
 
-            // Define o nome do setor se encontrado
+            // Se o setor for encontrado no banco de dados
             if (setorData) {
+                // Atualiza o estado com o nome do setor para ser exibido no relatório
                 setReportSetorNome(setorData.nome || '');
             }
         }
