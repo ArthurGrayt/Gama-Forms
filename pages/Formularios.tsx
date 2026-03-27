@@ -633,7 +633,7 @@ export const Formularios: React.FC = () => {
 
     const handleAutoRepairHSE = async () => {
         if (!currentHseForm || !hseQuestions.length || !hseDimensions.length) return;
-        
+
         const confirmRepair = window.confirm("Deseja restaurar automaticamente os vínculos entre estas 35 questões e as dimensões HSE padrão (Gestão, Carga, Controle, etc)? Isso corrigirá as Views vazias.");
         if (!confirmRepair) return;
 
@@ -644,7 +644,7 @@ export const Formularios: React.FC = () => {
             const updatedQuestions = hseQuestions.map((q, idx) => {
                 const questionNum = idx + 1;
                 let dimName = '';
-                
+
                 if (questionNum <= 5) dimName = 'Gestão e Apoio';
                 else if (questionNum <= 10) dimName = 'Carga de Trabalho';
                 else if (questionNum <= 15) dimName = 'Controle e Autonomia';
@@ -653,7 +653,7 @@ export const Formularios: React.FC = () => {
                 else if (questionNum <= 30) dimName = 'Papel na Organização';
                 else if (questionNum <= 35) dimName = 'Mudança';
 
-                const targetDim = hseDimensions.find(d => 
+                const targetDim = hseDimensions.find(d =>
                     d.name.toLowerCase().includes(dimName.toLowerCase())
                 );
 
@@ -937,7 +937,7 @@ export const Formularios: React.FC = () => {
             // Get all unit IDs first (from the just fetched data or via query)
             if (unitsData && unitsData.length > 0) {
                 const unitIds = unitsData.map(u => u.id);
-                
+
                 // Ativos
                 const { count: activeCount } = await supabase
                     .from('colaboradores')
@@ -955,7 +955,7 @@ export const Formularios: React.FC = () => {
                 const totalActive = activeCount || 0;
                 setColabsCount(totalActive);
                 setInactiveColabsCount(inactiveCount || 0);
-                
+
                 const isLarge = totalActive > 20;
                 setRequireSector(isLarge);
                 setDivideBySector(isLarge); // Por padrão, se for grande (> 20), sugere dividir por setor
@@ -1106,7 +1106,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                 .single();
 
             let baseQuestions: any[] = [];
-            
+
             if (baseForm && baseForm.id) {
                 // Se encontrou um form base, busca as perguntas dele
                 const { data: questions } = await supabase
@@ -1114,7 +1114,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                     .select('*')
                     .eq('form_id', baseForm.id)
                     .order('question_order', { ascending: true });
-                
+
                 if (questions) {
                     // Prepara as perguntas para o novo form (removendo id e form_id antigos, e gerando temp_ids)
                     baseQuestions = questions.map(q => {
@@ -1755,10 +1755,10 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                     if (shouldFilterBySector) {
                         const targetSector = String(form.setor).toLowerCase().trim();
                         console.log(`[Analytics] Aplicando filtro de setor para: "${targetSector}"`);
-                        
+
                         // Filtra por ID (string ou number) ou por nome (case-insensitive) como fallback
-                        validUsersForList = activeUsersData.filter((u: any) => 
-                            String(u.setorid) === targetSector || 
+                        validUsersForList = activeUsersData.filter((u: any) =>
+                            String(u.setorid) === targetSector ||
                             String(u.setor).toLowerCase().trim() === targetSector
                         );
 
@@ -1855,7 +1855,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                     .select('texto_conclusao_pronto')
                     .eq('form_id', form.id)
                     .maybeSingle();
-                
+
                 if (conError) console.error('[Analytics] Erro view_hse_texto_conclusao:', conError);
                 setConclusionText(conData?.texto_conclusao_pronto || '');
 
@@ -3132,10 +3132,11 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                 <h2 className="text-lg font-bold text-blue-800 mb-2" style={{ breakAfter: 'avoid' }}>6. Recomendações de Plano de Ação</h2>
                                 <div className="text-slate-800 text-sm leading-relaxed text-justify">
                                     {actionPlanText ? (
-                                        actionPlanText.replace(/fragilidade/gi, 'exposição').split('\n').filter(l => l.trim()).map((line, idx) => {
+                                        actionPlanText.replace(/fragilidade/gi, 'exposição').split('\n').map((line, idx) => {
                                             // Handle HTML bold tags <b>text</b>
                                             // We won't strip them anymore, we'll parse them.
                                             const rawLine = line.trim();
+                                            if (!rawLine) return <br key={idx} />;
 
                                             // Helper to parse line with <b> tags
                                             const parseBold = (text: string) => {
@@ -3157,7 +3158,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                                 cleanText.match(/:+$/); // Ends with : or ::
 
                                             if (isHeader) {
-                                                return <p key={idx} className="font-bold text-slate-900 mt-0.5 mb-0">{parseBold(rawLine)}</p>;
+                                                return <p key={idx} className="font-bold text-slate-900 mt-1 mb-0.5">{parseBold(rawLine)}</p>;
                                             }
 
                                             // Parsing for Inline Titles (Dimensions or "Title:")
@@ -3750,20 +3751,20 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                                                                     const total = qAnswers.length || 1;
                                                                                     const reportBuckets: { label: string, count: number, perc: number }[] = [];
 
-                                                                                        if (question.question_type === 'rating' || question.question_type === 'choice' || question.question_type === 'select') {
-                                                                                            // Build labels array dynamically from available options or defaults
-                                                                                            const rawLabels = [
-                                                                                                question.option_1 || 'Nunca',
-                                                                                                question.option_2 || 'Raramente',
-                                                                                                question.option_3 || 'Às vezes',
-                                                                                                question.option_4 || 'Frequentemente',
-                                                                                                question.option_5 || 'Sempre'
-                                                                                            ];
+                                                                                    if (question.question_type === 'rating' || question.question_type === 'choice' || question.question_type === 'select') {
+                                                                                        // Build labels array dynamically from available options or defaults
+                                                                                        const rawLabels = [
+                                                                                            question.option_1 || 'Nunca',
+                                                                                            question.option_2 || 'Raramente',
+                                                                                            question.option_3 || 'Às vezes',
+                                                                                            question.option_4 || 'Frequentemente',
+                                                                                            question.option_5 || 'Sempre'
+                                                                                        ];
 
-                                                                                            // Only use as many labels as there are options defined in DB or default to 5
-                                                                                            const numOptions = [question.option_1, question.option_2, question.option_3, question.option_4, question.option_5].filter(Boolean).length || 5;
-                                                                                            const labels = rawLabels.slice(0, numOptions);
-                                                                                            const counts = new Array(labels.length).fill(0);
+                                                                                        // Only use as many labels as there are options defined in DB or default to 5
+                                                                                        const numOptions = [question.option_1, question.option_2, question.option_3, question.option_4, question.option_5].filter(Boolean).length || 5;
+                                                                                        const labels = rawLabels.slice(0, numOptions);
+                                                                                        const counts = new Array(labels.length).fill(0);
 
                                                                                         qAnswers.forEach(a => {
                                                                                             const val = Number(a.answer_number ?? -1);
@@ -4454,9 +4455,9 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
             {/* Cabeçalho com Logo e Título */}
             <div className="flex items-center gap-4 mb-8">
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-50 to-white shadow-sm flex items-center justify-center p-2 border border-slate-100">
-                    <img 
-                        src="https://wofipjazcxwxzzxjsflh.supabase.co/storage/v1/object/public/Media/Image/image-removebg-preview%20(2).png" 
-                        alt="Gama Logo" 
+                    <img
+                        src="https://wofipjazcxwxzzxjsflh.supabase.co/storage/v1/object/public/Media/Image/image-removebg-preview%20(2).png"
+                        alt="Gama Logo"
                         className="w-full h-auto object-contain"
                     />
                 </div>
@@ -4760,16 +4761,16 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                         const selectedCompany = companies.find(c => c.id === val);
                                         const companyName = selectedCompany ? (selectedCompany.razao_social || selectedCompany.nome_fantasia || '') : '';
                                         const cnpj = selectedCompany?.cnpj || '';
-                                        
+
                                         setEditingForm(prev => {
                                             if (!prev) return null;
-                                            
+
                                             // Atualiza título e slug com o novo padrão
                                             const formattedDate = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
-                                            
+
                                             // Formato: Levantamento Preliminar Psicossocial - (razao_social) - CNPJ
                                             const newTitle = `Levantamento Preliminar Psicossocial - ${companyName} - ${cnpj}`;
-                                            
+
                                             // Slug baseado no novo título
                                             const newSlug = `levantamento-psicossocial-${companyName.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}-${cnpj.replace(/\D/g, '')}-${formattedDate}`;
 
@@ -4790,7 +4791,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                     onChange={(val: any) => {
                                         setEditingForm(prev => {
                                             if (!prev) return null;
-                                            
+
                                             // Ao trocar unidade, o setor é resetado. 
                                             // Removemos o setor do título se ele existir (mantendo as 3 partes base)
                                             let newTitle = prev.title;
@@ -4798,7 +4799,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                             if (parts.length > 3) {
                                                 newTitle = `${parts[0]} - ${parts[1]} - ${parts[2]}`;
                                             }
-                                            
+
                                             return { ...prev, unidade_id: val, setor: undefined, title: newTitle };
                                         });
                                     }}
@@ -4827,7 +4828,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                     >
                                         <Edit2 size={14} className="group-hover:scale-110 transition-transform" />
                                     </button>
-                                    
+
                                     {targetColabsCount !== null && (
                                         <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-bold">
                                             No Setor: {targetColabsCount}
@@ -4835,8 +4836,8 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                     )}
                                     {colabsCount > 20 && (
                                         <div className="flex items-center gap-2 bg-amber-50 px-2 py-1 rounded border border-amber-100">
-                                            <input 
-                                                type="checkbox" 
+                                            <input
+                                                type="checkbox"
                                                 id="divide-sector-toggle"
                                                 checked={divideBySector}
                                                 onChange={(e) => handleToggleDivideBySector(e.target.checked)}
@@ -4869,7 +4870,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
 
                                                 // Analisa o título atual para identificar as partes
                                                 const parts = newTitle.split(' - ');
-                                                
+
                                                 if (sector) {
                                                     // Se o título já tem o formato padrão (Pelo menos Prefixo, Empresa e CNPJ)
                                                     if (parts.length >= 3) {
@@ -5018,9 +5019,9 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                         </div>
                         <div className="flex gap-2">
                             {hseQuestions.length === 35 && (
-                                <Button 
-                                    size="sm" 
-                                    variant="outline" 
+                                <Button
+                                    size="sm"
+                                    variant="outline"
                                     className="border-amber-500 text-amber-600 hover:bg-amber-50"
                                     onClick={handleAutoRepairHSE}
                                 >
