@@ -1454,6 +1454,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
 
     // HSE Report Modal State
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [showSectorInPdf, setShowSectorInPdf] = useState(true);
 
     // Metadados do relatório: empresa, CNPJ e setor (buscados sob demanda)
     const [reportEmpresaNome, setReportEmpresaNome] = useState<string>('');
@@ -2747,6 +2748,28 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                         </Button>
                                     </div>
                                 </div>
+
+                                {/* Linha 2: Opções de Exibição */}
+                                <div className="flex items-center gap-6 pt-2 border-t border-slate-200">
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <div className="relative flex items-center justify-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={showSectorInPdf}
+                                                onChange={(e) => setShowSectorInPdf(e.target.checked)}
+                                                className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 transition-all checked:border-blue-500 checked:bg-blue-500 hover:border-blue-400"
+                                            />
+                                            <Check size={14} className="absolute text-white opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity" />
+                                        </div>
+                                        <span className="text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors">Exibir Setor no PDF</span>
+                                    </label>
+
+                                    <div className="flex-1 text-right">
+                                        <p className="text-[10px] text-slate-400 italic">
+                                            Dica: Desmarque acima para ocultar a informação do Setor na identificação do laudo.
+                                        </p>
+                                    </div>
+                                </div>
                                 <Button
                                     onClick={() => {
                                         const element = document.getElementById('hse-report-content');
@@ -2861,30 +2884,26 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             </div>
 
 
-                            {/* Bloco de identificação: empresa sempre visível, CNPJ e setor só quando há setor */}
-                            <div className="mb-6 pb-4 border-b border-slate-100">
-                                {/* Nome da empresa — exibido SEMPRE */}
-                                <p className="text-sm text-slate-700">
+                            {/* Bloco de identificação: Empresa e Setor lado a lado */}
+                            <div className="mb-6 pb-2 border-b border-slate-100 flex flex-wrap items-center gap-x-12 gap-y-1">
+                                {/* Nome da empresa */}
+                                <div className="text-sm text-slate-800">
                                     <span className="font-bold">Empresa: </span>
                                     {reportEmpresaNome || '—'}
-                                </p>
+                                </div>
 
-                                {/* CNPJ e Setor — exibidos somente quando o formulário tiver setor associado */}
-                                {reportSetorNome && (
-                                    <>
-                                        {/* CNPJ aparece junto ao setor */}
-                                        {reportCnpj && (
-                                            <p className="text-sm text-slate-700">
-                                                <span className="font-bold">CNPJ: </span>
-                                                {reportCnpj}
-                                            </p>
-                                        )}
-                                        {/* Nome do setor */}
-                                        <p className="text-sm text-slate-700">
-                                            <span className="font-bold">Setor: </span>
-                                            {reportSetorNome}
-                                        </p>
-                                    </>
+                                {/* Setor e CNPJ */}
+                                {showSectorInPdf && reportSetorNome && (
+                                    <div className="text-sm text-slate-800">
+                                        <span className="font-bold">Setor: </span>
+                                        {reportSetorNome}
+                                    </div>
+                                )}
+                                {reportCnpj && (
+                                    <div className="text-sm text-slate-500">
+                                        <span className="font-bold">CNPJ: </span>
+                                        {reportCnpj}
+                                    </div>
                                 )}
                             </div>
 
@@ -2961,7 +2980,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                             </div>
 
                             {/* 3. Resultados por Item (diagnóstico detalhado) */}
-                            <div className="mb-0 pb-0" style={{ marginTop: '2rem', marginBottom: 0, paddingBottom: 0 }}>
+                            <div className="mb-0 pb-0" style={{ marginTop: '6rem', marginBottom: 0, paddingBottom: 0 }}>
                                 <h2 className="text-lg font-bold text-blue-600 mb-3" style={{ breakAfter: 'avoid', pageBreakAfter: 'avoid', marginTop: 0 }}>3. Resultados por Item (diagnóstico detalhado)</h2>
                                 <div className="space-y-6">
                                     {Object.entries(diagnosticData.reduce((acc, item) => {
@@ -3129,14 +3148,13 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
 
                             {/* 6. Recomendações de Plano de Ação */}
                             <div className="mb-2">
-                                <h2 className="text-lg font-bold text-blue-800 mb-2" style={{ breakAfter: 'avoid' }}>6. Recomendações de Plano de Ação</h2>
+                                <h2 className="text-lg font-bold text-blue-800 mb-1" style={{ breakAfter: 'avoid' }}>6. Recomendações de Plano de Ação</h2>
                                 <div className="text-slate-800 text-sm leading-relaxed text-justify">
                                     {actionPlanText ? (
-                                        actionPlanText.replace(/fragilidade/gi, 'exposição').split('\n').map((line, idx) => {
+                                        actionPlanText.replace(/fragilidade/gi, 'exposição').split('\n').filter(l => l.trim()).map((line, idx) => {
                                             // Handle HTML bold tags <b>text</b>
                                             // We won't strip them anymore, we'll parse them.
                                             const rawLine = line.trim();
-                                            if (!rawLine) return <br key={idx} />;
 
                                             // Helper to parse line with <b> tags
                                             const parseBold = (text: string) => {
@@ -3158,7 +3176,7 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                                                 cleanText.match(/:+$/); // Ends with : or ::
 
                                             if (isHeader) {
-                                                return <p key={idx} className="font-bold text-slate-900 mt-1 mb-0.5">{parseBold(rawLine)}</p>;
+                                                return <p key={idx} className="font-bold text-slate-900 mt-0.5 mb-0">{parseBold(rawLine)}</p>;
                                             }
 
                                             // Parsing for Inline Titles (Dimensions or "Title:")
