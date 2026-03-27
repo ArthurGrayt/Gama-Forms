@@ -5,6 +5,8 @@ import { supabase } from '../services/supabase';
 import { Form, FormQuestion, Collaborator } from '../types';
 import { CheckCircle, Check, AlertCircle, ChevronRight, Send, Star, User, Hash, ChevronDown, Building2, MapPin, Briefcase, Search, Plus } from 'lucide-react';
 import FacialPermission from './FacialPermission';
+// Importa o componente de aceitação de termos para o fluxo de segurança
+import FacialVerifyPage from './FacialVerifyPage';
 
 const LoadingScreen = () => (
     <div className="fixed inset-0 bg-gray-50 z-50 flex items-center justify-center font-sans antialiased">
@@ -231,8 +233,12 @@ export const FormularioPublico: React.FC = () => {
 
     // Form State
     const [answers, setAnswers] = useState<Record<number, any>>({});
-    // Adicionado o step 'facial_verification' para o fluxo de reconhecimento facial/termos
-    const [step, setStep] = useState<'cover' | 'cpf_check' | 'facial_verification' | 'form'>('cover');
+    // Adicionado o step 'terms_acceptance' para o fluxo obrigatório de termos
+    const [step, setStep] = useState<'cover' | 'cpf_check' | 'terms_acceptance' | 'facial_verification' | 'form'>('cover');
+    // Estados para garantir que as etapas de segurança foram concluídas com sucesso
+    const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+    const [hasVerifiedFace, setHasVerifiedFace] = useState(false);
+    // Controla a seção atual do formulário paginado
     const [currentSection, setCurrentSection] = useState(0);
 
     const sections = React.useMemo(() => {
@@ -344,6 +350,28 @@ export const FormularioPublico: React.FC = () => {
         await minWaitPromise;
         setLoading(false);
     };
+
+    // Efeito de segurança: Garante que o usuário não pule etapas do fluxo obrigatório
+    useEffect(() => {
+        // Se tentar acessar o formulário sem as verificações necessárias
+        if (step === 'form') {
+            // Verifica se o colaborador foi identificado e se passou pelos termos e biometria
+            if (!collaborator || !hasAcceptedTerms || !hasVerifiedFace) {
+                // Força o retorno para a identificação básica caso falte algum requisito
+                setStep('cpf_check');
+            }
+        }
+        // Se estiver na tela de biometria mas não aceitou os termos ainda
+        if (step === 'facial_verification' && !hasAcceptedTerms) {
+            // Retorna para a tela de termos
+            setStep('terms_acceptance');
+        }
+        // Se estiver em qualquer etapa de segurança sem um colaborador identificado
+        if ((step === 'terms_acceptance' || step === 'facial_verification') && !collaborator) {
+            // Retorna para a tela de CPF
+            setStep('cpf_check');
+        }
+    }, [step, collaborator, hasAcceptedTerms, hasVerifiedFace]);
 
     const validateCPF = (cpf: string) => {
         cpf = cpf.replace(/[^\d]+/g, '');
@@ -502,9 +530,10 @@ export const FormularioPublico: React.FC = () => {
                 }
             }
 
-            // Atualiza o estado com o colaborador identificado e avança para a etapa de verificação facial
+            // Atualiza o estado com o colaborador identificado e avança para a etapa de TERMOS (fluxo obrigatório)
             setCollaborator({ ...colabData, empresa_nome: companyName });
-            setStep('facial_verification');
+            // Próximo passo obrigatório: Aceitação dos termos
+            setStep('terms_acceptance');
         } else {
             // Colaborador não encontrado em nenhuma das estratégias -> abre o modal de cadastro
             setShowRegisterModal(true);
@@ -517,8 +546,8 @@ export const FormularioPublico: React.FC = () => {
     const handleRegistrationSuccess = (newColab: Collaborator) => {
         setCollaborator(newColab);
         setShowRegisterModal(false);
-        // Após o cadastro, o usuário também deve passar pela verificação facial
-        setStep('facial_verification');
+        // Após o cadastro, o usuário também deve passar pela aceitação de termos
+        setStep('terms_acceptance');
     };
 
     const handleAnswerChange = (questionId: number, value: any) => {
@@ -818,13 +847,35 @@ export const FormularioPublico: React.FC = () => {
                 </div>
             )}
 
+            {/* ETAPA 0.70: ACEITAÇÃO DE TERMOS (LGPD & BioID) */}
+            {step === 'terms_acceptance' && (
+                <FacialVerifyPage 
+                    // Se aceitar, marca o estado e avança para a verificação facial propriamente dita
+                    onAccept={() => {
+                        setHasAcceptedTerms(true);
+                        setStep('facial_verification');
+                    }}
+                    // Se recusar, volta para a tela de CPF
+                    onDecline={() => {
+                        setStep('cpf_check');
+                        setHasAcceptedTerms(false);
+                    }}
+                />
+            )}
+
             {/* ETAPA 0.75: BIOMETRIA FACIAL AVANÇADA (TensorFlow.js) */}
             {step === 'facial_verification' && (
                 <FacialPermission 
                     // Avança para o preenchimento do formulário após sucesso na captura biométrica
-                    onAccept={() => setStep('form')}
+                    onAccept={() => {
+                        setHasVerifiedFace(true);
+                        setStep('form');
+                    }}
                     // Retorna para a identificação por CPF caso o usuário cancele ou ocorra erro
-                    onDecline={() => setStep('cpf_check')}
+                    onDecline={() => {
+                        setStep('cpf_check');
+                        setHasVerifiedFace(false);
+                    }}
                 />
             )}
 
