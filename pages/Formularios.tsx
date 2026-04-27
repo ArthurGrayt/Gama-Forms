@@ -1353,7 +1353,11 @@ Em caso de dúvidas, entre em contato com seu Líder.`;
                     option_5: q.option_5,
                     min_value: q.min_value,
                     max_value: q.max_value,
-                    hse_dimension_id: q.hse_dimension_id || null
+                    hse_dimension_id: q.hse_dimension_id || null,
+                    // Preserva o plano de ação e o título do relatório copiados do template base
+                    plano_acao_item: q.plano_acao_item || null,
+                    // Preserva o título personalizado do relatório HSE
+                    titulo_relatorio: q.titulo_relatorio || null
                 };
 
                 if (q.id) {
